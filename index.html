@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Madalyon" />
+  <title>Madalyon Hukuk Bürosu</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    const firebaseConfig = {
+      apiKey: "AIzaSyDGTijJZWADo26rjl1s_r1QSURhDeH_i6E",
+      authDomain: "madalyon-hesap.firebaseapp.com",
+      databaseURL: "https://madalyon-hesap-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "madalyon-hesap",
+      storageBucket: "madalyon-hesap.firebasestorage.app",
+      messagingSenderId: "1054387495626",
+      appId: "1:1054387495626:web:3db7c0135f9f8965438a33"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+    window.__fbDb=db; window.__fbRef=ref; window.__fbSet=set; window.__fbOn=onValue;
+    window.__fbReady=true; window.dispatchEvent(new Event("fb-ready"));
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    body { background:#f5f3ef; font-family:'Inter',sans-serif; color:#1a1a1a; }
+    input { outline:none; font-family:'Inter',sans-serif; }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; }
+    ::-webkit-scrollbar { width:0; }
+    .playfair { font-family:'Playfair Display',serif; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const DEFAULT_NAMES = ["Yunus", "Batuhan", "Necati"];
+const ACCENT = ["#c0392b","#1a5276","#1e8449"];
+const LIGHT  = ["#fdf2f2","#f0f5fb","#f0faf3"];
+const BORDER = ["#f5c6c2","#b8d4ed","#a9dfbf"];
+const MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran",
+                "Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+
+const now = new Date();
+const defaultMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+
+function fmt(n) {
+  return n.toLocaleString("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2})+" ₺";
+}
+function nowStr(){return new Date().toLocaleDateString("tr-TR")+" "+new Date().toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"});}
+function todayStr(){return new Date().toLocaleDateString("tr-TR");}
+function monthLabel(ym) {
+  const [y,m]=ym.split("-");
+  return `${MONTHS[parseInt(m)-1]} ${y}`;
+}
+function fbSave(path,value) {
+  if(!window.__fbReady) return;
+  window.__fbSet(window.__fbRef(window.__fbDb,path),value);
+}
+function fbListen(path,cb) {
+  if(!window.__fbReady) return ()=>{};
+  return window.__fbOn(window.__fbRef(window.__fbDb,path),snap=>cb(snap.val()));
+}
+
+function BarChart({stats,names}) {
+  const maxVal=Math.max(...stats.map(d=>Math.max(d.inc,d.exp)),1);
+  return (
+    <div style={{background:"#fff",borderRadius:14,padding:"18px 16px",
+      boxShadow:"0 2px 8px rgba(0,0,0,0.04)",border:"1px solid #ede9e3",marginBottom:16}}>
+      <div style={{fontSize:11,color:"#aaa",letterSpacing:2,fontWeight:600,marginBottom:16}}>
+        GELİR / GİDER KARŞILAŞTIRMASI
+      </div>
+      <div style={{display:"flex",gap:6,alignItems:"flex-end",height:100}}>
+        {stats.map((d,i)=>{
+          const incH=Math.round((d.inc/maxVal)*90);
+          const expH=Math.round((d.exp/maxVal)*90);
+          return (
+            <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+              <div style={{display:"flex",gap:3,alignItems:"flex-end",height:90}}>
+                <div style={{width:14,background:"#1e8449",borderRadius:"3px 3px 0 0",height:incH||2}}/>
+                <div style={{width:14,background:"#c0392b",borderRadius:"3px 3px 0 0",height:expH||2}}/>
+              </div>
+              <div style={{fontSize:10,color:"#888",textAlign:"center",fontWeight:500}}>
+                {names[i].slice(0,4)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{display:"flex",gap:16,marginTop:12,justifyContent:"center"}}>
+        <div style={{display:"flex",alignItems:"center",gap:5}}>
+          <div style={{width:10,height:10,borderRadius:2,background:"#1e8449"}}/>
+          <span style={{fontSize:11,color:"#888"}}>Gelir</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:5}}>
+          <div style={{width:10,height:10,borderRadius:2,background:"#c0392b"}}/>
+          <span style={{fontSize:11,color:"#888"}}>Gider</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TrendChart({months,summaries}) {
+  if(months.length<2) return null;
+  const vals=summaries.map(s=>s.netShare);
+  const maxV=Math.max(...vals,1),minV=Math.min(...vals,0);
+  const range=maxV-minV||1;
+  const W=300,H=80;
+  const pts=vals.map((v,i)=>{
+    const x=(i/(vals.length-1))*(W-20)+10;
+    const y=H-((v-minV)/range)*(H-16)-8;
+    return `${x},${y}`;
+  });
+  return (
+    <div style={{background:"#fff",borderRadius:14,padding:"18px 16px",
+      boxShadow:"0 2px 8px rgba(0,0,0,0.04)",border:"1px solid #ede9e3",marginBottom:16}}>
+      <div style={{fontSize:11,color:"#aaa",letterSpacing:2,fontWeight:600,marginBottom:12}}>
+        AYLIK NET TREND
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:H}}>
+        <defs>
+          <linearGradient id="tg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#1a5276" stopOpacity="0.15"/>
+            <stop offset="100%" stopColor="#1a5276" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        <polygon points={`10,${H} ${pts.join(" ")} ${W-10},${H}`} fill="url(#tg)"/>
+        <polyline points={pts.join(" ")} fill="none" stroke="#1a5276" strokeWidth="2" strokeLinejoin="round"/>
+        {pts.map((pt,i)=>{const [x,y]=pt.split(","); return <circle key={i} cx={x} cy={y} r="3" fill="#1a5276"/>;})}
+      </svg>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+        {months.map((m,i)=>(
+          <div key={i} style={{fontSize:9,color:"#bbb",textAlign:"center"}}>
+            {MONTHS[parseInt(m.split("-")[1])-1].slice(0,3)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [donemler,     setDonemler]     = useState(null);
+  const [names,        setNames]        = useState(DEFAULT_NAMES);
+  const [screen,       setScreen]       = useState("home");
+  const [subTab,       setSubTab]       = useState("kayitlar");
+  const [form,         setForm]         = useState({type:"gelir",desc:"",amount:""});
+  const [editingNames, setEditingNames] = useState(false);
+  const [tempNames,    setTempNames]    = useState(DEFAULT_NAMES);
+  const [fbReady,      setFbReady]      = useState(!!window.__fbReady);
+  const [syncing,      setSyncing]      = useState(false);
+  const [resetModal,   setResetModal]   = useState(false);
+  const [resetConfirm, setResetConfirm] = useState("");
+  const [toast,        setToast]        = useState(null);
+  const [showArchive,  setShowArchive]  = useState(false);
+  const [showNewDonem,     setShowNewDonem]     = useState(false);
+  const [newDonemName,     setNewDonemName]     = useState("");
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  const [eskiVeri,     setEskiVeri]     = useState(null);
+  const [showMigrate,  setShowMigrate]  = useState(false);
+
+  const aktifDonem = donemler ? (donemler.find(d=>!d.closed) || donemler[donemler.length-1] || null) : null;
+
+  function eskiVeriAktar(birlesik){
+    if(!eskiVeri) return;
+    const MONTHS_=["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+    const aylar=Object.keys(eskiVeri).sort();
+    if(birlesik){
+      // Tüm ayları tek dönemde birleştir
+      const mergedData={};
+      aylar.forEach(ay=>{
+        [0,1,2].forEach(i=>{
+          const entries=eskiVeri[ay]?.[i]||[];
+          if(!mergedData[i])mergedData[i]=[];
+          mergedData[i]=[...mergedData[i],...entries];
+        });
+      });
+      const donem={id:"donem_"+Date.now(),name:"Aktarılan Kayıtlar",startDate:aylar[0],endDate:null,closed:false,createdAt:Date.now(),data:mergedData};
+      fbSave("buro/donemler/"+donem.id,donem);
+      setDonemler([donem]);
+    } else {
+      // Her ay ayrı dönem
+      const yeniDonemler=aylar.map((ay,idx)=>{
+        const [y,m]=ay.split("-");
+        const label=MONTHS_[parseInt(m)-1]+" "+y;
+        return{id:"donem_"+Date.now()+"_"+idx,name:label,startDate:ay+"-01",endDate:ay+"-28",closed:true,createdAt:Date.now()+idx,data:eskiVeri[ay]||{}};
+      });
+      if(yeniDonemler.length>0){yeniDonemler[yeniDonemler.length-1].closed=false;yeniDonemler[yeniDonemler.length-1].endDate=null;}
+      yeniDonemler.forEach(d=>fbSave("buro/donemler/"+d.id,d));
+      setDonemler(yeniDonemler);
+    }
+    setShowMigrate(false);setEskiVeri(null);
+    showToast("✅ Eski veriler aktarıldı!","#1a5276");
+  }
+
+  useEffect(()=>{
+    function start(){
+      setFbReady(true);
+      const u1=fbListen("buro/donemler",v=>{
+        if(v){
+          const arr=Object.entries(v).map(([id,val])=>({id,...val}));
+          arr.sort((a,b)=>a.createdAt-b.createdAt);
+          setDonemler(arr);
+        } else {
+          // Dönem yok - eski buro/data var mı kontrol et
+          window.__fbOn(window.__fbRef(window.__fbDb,"buro/data"), snap=>{
+            const oldData=snap.val();
+            if(oldData && Object.keys(oldData).length>0){
+              setEskiVeri(oldData);
+              setShowMigrate(true);
+              setDonemler([]);
+            } else {
+              const ilk={id:"donem_"+Date.now(),name:"İlk Dönem",startDate:todayStr(),endDate:null,closed:false,createdAt:Date.now(),data:{}};
+              fbSave("buro/donemler/"+ilk.id,ilk);setDonemler([ilk]);
+            }
+          });
+        }
+      });
+      const u2=fbListen("buro/names",v=>{if(v){setNames(v);setTempNames(v);}});
+      return ()=>{u1&&u1();u2&&u2();};
+    }
+    if(window.__fbReady) return start();
+    const h=()=>start();
+    window.addEventListener("fb-ready",h);
+    return ()=>window.removeEventListener("fb-ready",h);
+  },[]);
+
+  function showToast(msg,color="#1e8449"){
+    setToast({msg,color});
+    setTimeout(()=>setToast(null),2800);
+  }
+  function saveDonem(d){setSyncing(true);fbSave("buro/donemler/"+d.id,d);setTimeout(()=>setSyncing(false),800);}
+  function getEntries(pIdx){return aktifDonem?.data?.[pIdx]||[];}
+  function getEntriesOf(d,pIdx){return d?.data?.[pIdx]||[];}
+
+  function calcSummary(d){
+    let ti=0,te=0;
+    const stats=[0,1,2].map(i=>{
+      const inc=getEntriesOf(d,i).filter(e=>e.type==="gelir").reduce((s,e)=>s+e.amount,0);
+      const exp=getEntriesOf(d,i).filter(e=>e.type==="gider").reduce((s,e)=>s+e.amount,0);
+      ti+=inc;te+=exp;return{inc,exp};
+    });
+    const net=ti-te,pp=net/3;
+    return{totalIncome:ti,totalExpense:te,netShare:net,perPerson:pp,stats,
+      results:[0,1,2].map(i=>({...stats[i],toReceive:pp+stats[i].exp,balance:pp+stats[i].exp-stats[i].inc,perPerson:pp}))};
+  }
+  const emptySummary={totalIncome:0,totalExpense:0,netShare:0,perPerson:0,stats:[{inc:0,exp:0},{inc:0,exp:0},{inc:0,exp:0}],results:[0,1,2].map(()=>({inc:0,exp:0,toReceive:0,balance:0,perPerson:0}))};
+  const summary=aktifDonem?calcSummary(aktifDonem):emptySummary;
+  const pIdx=screen.startsWith("ortak-")?parseInt(screen.split("-")[1]):null;
+
+  function addEntry(pIdx){
+    if(!aktifDonem||aktifDonem.closed)return;
+    const amount=parseFloat(form.amount);
+    if(!form.desc.trim()||isNaN(amount)||amount<=0)return;
+    const entry={id:Date.now(),type:form.type,desc:form.desc.trim(),amount,date:nowStr()};
+    const nd=JSON.parse(JSON.stringify(aktifDonem));
+    if(!nd.data)nd.data={};if(!nd.data[pIdx])nd.data[pIdx]=[];nd.data[pIdx].push(entry);
+    saveDonem(nd);setDonemler(donemler.map(d=>d.id===nd.id?nd:d));
+    setForm({type:form.type,desc:"",amount:""});
+    showToast(form.type==="gelir"?"✓ Gelir eklendi":"✓ Gider eklendi",form.type==="gelir"?"#1e8449":"#c0392b");
+  }
+  function delEntry(pIdx,id){
+    if(!aktifDonem||aktifDonem.closed)return;
+    const nd=JSON.parse(JSON.stringify(aktifDonem));
+    if(nd.data?.[pIdx])nd.data[pIdx]=nd.data[pIdx].filter(e=>e.id!==id);
+    saveDonem(nd);setDonemler(donemler.map(d=>d.id===nd.id?nd:d));
+  }
+  function doReset(){
+    if(resetConfirm!=="SIFIRLA")return;
+    const nd={...aktifDonem,data:{}};saveDonem(nd);setDonemler(donemler.map(d=>d.id===nd.id?nd:d));
+    setResetModal(false);setResetConfirm("");showToast("🗑 Dönem verileri silindi","#c0392b");
+  }
+  function yeniDonemAc(){
+    if(!newDonemName.trim())return;
+    const yeni={id:"donem_"+Date.now(),name:newDonemName.trim(),startDate:todayStr(),endDate:null,closed:false,createdAt:Date.now(),data:{}};
+    fbSave("buro/donemler/"+yeni.id,yeni);setDonemler([...donemler,yeni]);
+    setShowNewDonem(false);setNewDonemName("");showToast("✓ Yeni dönem: "+yeni.name);
+  }
+  function donemKapat(){
+    if(!aktifDonem)return;
+    const s=calcSummary(aktifDonem);
+    const dates=aktifDonem.startDate+" - "+todayStr();
+    buildPDF(aktifDonem.name,dates,names,s,false).save("Madalyon_"+aktifDonem.name.replace(/\s+/g,"_")+".pdf");
+    const nd={...aktifDonem,closed:true,endDate:todayStr()};
+    saveDonem(nd);setDonemler(donemler.map(d=>d.id===nd.id?nd:d));
+    setShowCloseConfirm(false);showToast("✅ Dönem kapatıldı, PDF indirildi","#1a5276");setScreen("home");
+  }
+  function exportPDFAktif(){
+    if(!aktifDonem)return;
+    const s=calcSummary(aktifDonem);
+    const dates=aktifDonem.startDate+" - "+(aktifDonem.endDate||"Devam ediyor");
+    buildPDF(aktifDonem.name,dates,names,s,aktifDonem.closed).save("Madalyon_"+aktifDonem.name.replace(/\s+/g,"_")+".pdf");
+    showToast("📄 PDF indirildi");
+  }
+  function exportPDFDonem(d){
+    const s=calcSummary(d);
+    const dates=d.startDate+" - "+(d.endDate||"Devam ediyor");
+    buildPDF(d.name,dates,names,s,d.closed).save("Madalyon_"+d.name.replace(/\s+/g,"_")+".pdf");
+    showToast("📄 PDF indirildi");
+  }
+
+  function buildPDF(title, dates, names, s, isClosed){
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    const ML=14,CW=182;
+    const tc=(r,g,b)=>doc.setTextColor(r,g,b);
+    const fc=(r,g,b)=>doc.setFillColor(r,g,b);
+    let y=0;
+    // Header
+    fc(26,26,26);doc.rect(0,0,210,32,"F");
+    tc(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(13);
+    doc.text("MADALYON HUKUK BUROSU",105,12,{align:"center"});
+    doc.setFont("helvetica","normal");doc.setFontSize(8.5);tc(180,180,180);
+    doc.text(title+"   |   "+dates,105,21,{align:"center"});
+    if(isClosed){fc(30,132,73);doc.roundedRect(86,25,38,6,2,2,"F");tc(255,255,255);doc.setFontSize(6.5);doc.setFont("helvetica","bold");doc.text("KAPALI DONEM",105,29.5,{align:"center"});}
+    y=40;
+    // Özet
+    fc(245,243,239);doc.roundedRect(ML,y,CW,26,3,3,"F");
+    doc.setDrawColor(220,216,210);doc.setLineWidth(0.3);doc.roundedRect(ML,y,CW,26,3,3,"S");
+    const thirds=CW/3;
+    [{lbl:"TOPLAM GELIR",val:fmt(s.totalIncome),rgb:[30,132,73],cx:ML+thirds*0.5},
+     {lbl:"TOPLAM GIDER",val:fmt(s.totalExpense),rgb:[192,57,43],cx:ML+thirds*1.5},
+     {lbl:"NET DAGITILACAK",val:fmt(s.netShare),rgb:[26,82,118],cx:ML+thirds*2.5}
+    ].forEach(({lbl,val,rgb,cx})=>{
+      doc.setFont("helvetica","normal");doc.setFontSize(6.5);tc(140,140,140);doc.text(lbl,cx,y+8,{align:"center"});
+      doc.setFont("helvetica","bold");doc.setFontSize(9.5);tc(...rgb);doc.text(val,cx,y+19,{align:"center"});
+    });
+    doc.setDrawColor(210,206,200);doc.line(ML+thirds,y+4,ML+thirds,y+22);doc.line(ML+thirds*2,y+4,ML+thirds*2,y+22);
+    y+=32;
+    doc.setFont("helvetica","normal");doc.setFontSize(8);tc(120,120,120);
+    doc.text("Kisi basi net pay:  "+fmt(s.perPerson),ML,y);y+=10;
+    // Ortak kartları
+    const CARD_H=52;
+    [0,1,2].forEach(i=>{
+      const r=s.results[i];
+      const bgRGB=i===0?[253,242,242]:i===1?[240,245,251]:[240,250,243];
+      const acRGB=i===0?[192,57,43]:i===1?[26,82,118]:[30,132,73];
+      const bdRGB=i===0?[245,198,194]:i===1?[184,212,237]:[169,223,191];
+      fc(...bgRGB);doc.roundedRect(ML,y,CW,CARD_H,3,3,"F");
+      doc.setDrawColor(...bdRGB);doc.setLineWidth(0.4);doc.roundedRect(ML,y,CW,CARD_H,3,3,"S");
+      fc(...acRGB);doc.circle(ML+10,y+CARD_H/2,7,"F");
+      tc(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(9);doc.text(names[i][0].toUpperCase(),ML+10,y+CARD_H/2+3.5,{align:"center"});
+      tc(...acRGB);doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text(names[i],ML+21,y+13);
+      [["Toplanan Gelir:",fmt(r.inc),[30,132,73]],["Yapilan Gider:",fmt(r.exp),[192,57,43]],["Toplam Alacagi:",fmt(r.toReceive),[26,82,118]]].forEach(([lbl,val,rgb],ri)=>{
+        const ry=y+22+(ri*9);tc(100,100,100);doc.setFont("helvetica","normal");doc.setFontSize(8);doc.text(lbl,ML+21,ry);
+        tc(...rgb);doc.setFont("helvetica","bold");doc.setFontSize(8);doc.text(val,ML+75,ry);
+      });
+      const balTxt=r.balance>0.01?"Kasadan "+fmt(r.balance)+" alacak":r.balance<-0.01?"Kasaya "+fmt(Math.abs(r.balance))+" odeyecek":"Hesap tamam";
+      const balRGB=r.balance>0.01?[30,132,73]:r.balance<-0.01?[192,57,43]:[100,100,100];
+      const balBg=r.balance>0.01?[240,250,243]:r.balance<-0.01?[253,242,242]:[249,248,246];
+      fc(...balBg);doc.roundedRect(ML+120,y+16,CW-122,20,2,2,"F");
+      tc(...balRGB);doc.setFont("helvetica","bold");doc.setFontSize(7.5);
+      doc.text(balTxt,ML+121+((CW-122)/2),y+28,{align:"center",maxWidth:CW-124});
+      y+=CARD_H+6;
+    });
+    doc.setFont("helvetica","normal");doc.setFontSize(7.5);tc(180,180,180);
+    doc.text("Olusturulma: "+new Date().toLocaleDateString("tr-TR")+"  -  Madalyon Hukuk Burosu",105,287,{align:"center"});
+    return doc;
+  }
+  function exportPDF(){
+    const s=calcSummary(aktifDonem||{});
+    const _lbl=aktifDonem?aktifDonem.name:(new Date().toLocaleDateString("tr-TR"));
+    buildPDF(_lbl,_lbl,names,s,false).save("Madalyon_Rapor.pdf");
+    showToast("📄 PDF indirildi");
+  }
+
+  // ── LOADING ──
+  if(!fbReady||donemler===null) return (
+    <div style={{minHeight:"100vh",background:"#f5f3ef",display:"flex",
+      alignItems:"center",justifyContent:"center"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:44,marginBottom:12}}>⚖️</div>
+        <div className="playfair" style={{fontSize:20,color:"#1a1a1a",marginBottom:6}}>Madalyon Hukuk Bürosu</div>
+        <div style={{color:"#888",fontSize:13}}>Bağlanıyor...</div>
+      </div>
+    </div>
+  );
+
+  // ── GÖÇ EKRANI ──
+  if(showMigrate && eskiVeri) {
+    const aylar = Object.keys(eskiVeri).sort();
+    const MONTHS_=["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+    return (
+      <div style={{minHeight:"100vh",background:"#f5f3ef",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{background:"#fff",borderRadius:20,padding:28,width:"100%",maxWidth:380,boxShadow:"0 20px 60px rgba(0,0,0,0.12)"}}>
+          <div style={{fontSize:36,textAlign:"center",marginBottom:12}}>📦</div>
+          <div className="playfair" style={{fontSize:20,fontWeight:700,textAlign:"center",marginBottom:8}}>Eski Veriler Bulundu</div>
+          <div style={{fontSize:13,color:"#888",textAlign:"center",marginBottom:20,lineHeight:1.7}}>
+            Firebase'de kayıtlı <strong style={{color:"#1a1a1a"}}>{aylar.length} aylık</strong> veri bulundu.
+          </div>
+          <div style={{background:"#f9f8f6",borderRadius:12,padding:"12px 16px",marginBottom:20}}>
+            {aylar.map(ay=>{
+              const [y,m]=ay.split("-");
+              const label=MONTHS_[parseInt(m)-1]+" "+y;
+              let kayit=0;[0,1,2].forEach(i=>{kayit+=(eskiVeri[ay]?.[i]||[]).length;});
+              return(
+                <div key={ay} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #ede9e3",fontSize:13}}>
+                  <span style={{color:"#1a1a1a",fontWeight:500}}>{label}</span>
+                  <span style={{color:"#888"}}>{kayit} kayıt</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{fontSize:12,color:"#aaa",marginBottom:14,textAlign:"center"}}>Bu verileri nasıl aktarmak istersiniz?</div>
+          <button onClick={()=>eskiVeriAktar(false)} style={{
+            width:"100%",background:"#1a5276",border:"none",borderRadius:12,
+            padding:"13px",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:600,marginBottom:10}}>
+            📅 Her ay ayrı dönem olsun
+          </button>
+          <button onClick={()=>eskiVeriAktar(true)} style={{
+            width:"100%",background:"#fff",border:"2px solid #1a5276",borderRadius:12,
+            padding:"13px",color:"#1a5276",cursor:"pointer",fontSize:14,fontWeight:600,marginBottom:10}}>
+            📁 Hepsi tek dönemde birleşsin
+          </button>
+          <button onClick={()=>{setShowMigrate(false);const ilk={id:"donem_"+Date.now(),name:"Yeni Dönem",startDate:todayStr(),endDate:null,closed:false,createdAt:Date.now(),data:{}};fbSave("buro/donemler/"+ilk.id,ilk);setDonemler([ilk]);}} style={{
+            width:"100%",background:"#f5f3ef",border:"none",borderRadius:12,
+            padding:"11px",color:"#888",cursor:"pointer",fontSize:13}}>
+            Eski verileri kullanmadan başla
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── ORTAK DETAY EKRANI ──
+  if(screen.startsWith("ortak-")){
+    const ac=ACCENT[pIdx],lt=LIGHT[pIdx],bd=BORDER[pIdx];
+    const myEntries=getEntries(pIdx);
+    const myInc=myEntries.filter(e=>e.type==="gelir").reduce((s,e)=>s+e.amount,0);
+    const myExp=myEntries.filter(e=>e.type==="gider").reduce((s,e)=>s+e.amount,0);
+    const r=summary.results[pIdx];
+    const locked=aktifDonem?.closed;
+    return (
+      <div style={{minHeight:"100vh",background:"#f5f3ef",paddingBottom:80}}>
+        {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",
+          background:toast.color,color:"#fff",padding:"10px 20px",borderRadius:20,
+          fontSize:13,fontWeight:500,zIndex:999,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
+          whiteSpace:"nowrap"}}>{toast.msg}</div>}
+
+        {/* Header */}
+        <div style={{background:"#fff",borderBottom:"1px solid #e8e4de",padding:"14px 16px 0",
+          position:"sticky",top:0,zIndex:20,boxShadow:"0 1px 8px rgba(0,0,0,0.06)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <button onClick={()=>setScreen("home")}
+              style={{background:"none",border:"none",color:ac,cursor:"pointer",
+                fontSize:14,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+              ← Ana Ekran
+            </button>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:32,height:32,borderRadius:"50%",background:lt,
+                border:`2px solid ${bd}`,display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:14,color:ac,fontWeight:700}}>{names[pIdx][0]}</div>
+              <div className="playfair" style={{fontSize:15,fontWeight:700,color:"#1a1a1a"}}>
+                {names[pIdx]}
+              </div>
+            </div>
+            <div style={{fontSize:11,color:locked?"#c0392b":"#1e8449",fontWeight:600,background:locked?"#fdf2f2":"#f0faf3",padding:"4px 10px",borderRadius:20,border:`1px solid ${locked?"#f5c6c2":"#a9dfbf"}`}}>
+              {locked?"🔒 Kilitli":"🟢 Aktif"}
+            </div>
+          </div>
+          <div style={{display:"flex",borderRadius:10,overflow:"hidden",
+            border:"1px solid #ede9e3",marginBottom:12}}>
+            {[["kayitlar","📝 Kayıtlar"],["hesap","⚖️ Hesabım"]].map(([k,lbl])=>(
+              <button key={k} onClick={()=>setSubTab(k)} style={{
+                flex:1,background:subTab===k?"#1a1a1a":"transparent",border:"none",
+                color:subTab===k?"#fff":"#888",padding:"9px 4px",cursor:"pointer",
+                fontSize:13,fontFamily:"Inter,sans-serif",fontWeight:subTab===k?600:400,
+                transition:"all 0.15s"
+              }}>{lbl}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Gelir/Gider mini bar */}
+        <div style={{background:"#fff",borderBottom:"1px solid #ede9e3",padding:"12px 16px"}}>
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:1,background:"#f0faf3",borderRadius:10,padding:"10px 14px",border:"1px solid #a9dfbf"}}>
+              <div style={{fontSize:10,color:"#1e8449",letterSpacing:1,marginBottom:3,fontWeight:600}}>GELİR</div>
+              <div style={{fontSize:17,fontWeight:700,color:"#1e8449"}}>{fmt(myInc)}</div>
+            </div>
+            <div style={{flex:1,background:"#fdf2f2",borderRadius:10,padding:"10px 14px",border:"1px solid #f5c6c2"}}>
+              <div style={{fontSize:10,color:"#c0392b",letterSpacing:1,marginBottom:3,fontWeight:600}}>GİDER</div>
+              <div style={{fontSize:17,fontWeight:700,color:"#c0392b"}}>{fmt(myExp)}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Kayıtlar */}
+        {subTab==="kayitlar"&&(
+          <div style={{padding:16}}>
+            {!locked&&(<div style={{background:"#fff",border:`1px solid ${bd}`,borderRadius:14,
+              padding:16,marginBottom:20,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+              <div style={{fontSize:11,color:ac,letterSpacing:2,marginBottom:12,fontWeight:600}}>
+                YENİ KAYIT
+              </div>
+              <div style={{display:"flex",gap:8,marginBottom:10}}>
+                {["gelir","gider"].map(t=>(
+                  <button key={t} onClick={()=>setForm({...form,type:t})} style={{
+                    flex:1,padding:"10px",borderRadius:8,cursor:"pointer",
+                    border:form.type===t?(t==="gelir"?"2px solid #1e8449":"2px solid #c0392b"):"2px solid #ede9e3",
+                    background:form.type===t?(t==="gelir"?"#f0faf3":"#fdf2f2"):"#f9f8f6",
+                    color:form.type===t?(t==="gelir"?"#1e8449":"#c0392b"):"#aaa",
+                    fontFamily:"Inter,sans-serif",fontSize:14,fontWeight:500,transition:"all 0.15s"
+                  }}>{t==="gelir"?"↑ Gelir":"↓ Gider"}</button>
+                ))}
+              </div>
+              <input value={form.desc} onChange={e=>setForm({...form,desc:e.target.value})}
+                placeholder="Açıklama (örn: Dava ücreti, Kırtasiye...)"
+                style={{width:"100%",background:"#f9f8f6",border:"1px solid #ede9e3",
+                  borderRadius:8,padding:"11px 13px",color:"#1a1a1a",fontSize:14,marginBottom:10}}/>
+              <div style={{display:"flex",gap:10}}>
+                <input value={form.amount} type="number"
+                  onChange={e=>setForm({...form,amount:e.target.value})}
+                  onKeyDown={e=>{if(e.key==="Enter")addEntry(pIdx);}}
+                  placeholder="Tutar (₺)"
+                  style={{flex:1,background:"#f9f8f6",border:"1px solid #ede9e3",
+                    borderRadius:8,padding:"11px 13px",color:"#1a1a1a",fontSize:14}}/>
+                <button onClick={()=>addEntry(pIdx)} style={{
+                  background:ac,border:"none",borderRadius:8,padding:"11px 22px",
+                  color:"#fff",cursor:"pointer",fontSize:22,fontWeight:"bold",
+                  boxShadow:`0 4px 12px ${ac}44`}}>+</button>
+              </div>
+            </div>)}
+            {locked&&(
+              <div style={{background:"#fdf2f2",border:"1px solid #f5c6c2",borderRadius:12,
+                padding:"12px 16px",marginBottom:16,fontSize:13,color:"#c0392b",textAlign:"center"}}>
+                🔒 Bu dönem kapatılmış. Yeni kayıt eklenemez.
+              </div>
+            )}
+            <div style={{fontSize:11,color:"#aaa",letterSpacing:2,marginBottom:12,fontWeight:600}}>
+              {aktifDonem?.name?.toUpperCase()} KAYITLARI
+            </div>
+            {myEntries.length===0&&(
+              <div style={{textAlign:"center",padding:"50px 0",color:"#ccc",fontSize:14}}>Henüz kayıt yok</div>
+            )}
+            {[...myEntries].reverse().map(entry=>(
+              <div key={entry.id} style={{
+                background:"#fff",
+                borderLeft:`3px solid ${entry.type==="gelir"?"#1e8449":"#c0392b"}`,
+                borderRadius:"0 10px 10px 0",padding:"12px 16px",marginBottom:8,
+                display:"flex",justifyContent:"space-between",alignItems:"center",
+                boxShadow:"0 1px 4px rgba(0,0,0,0.05)"}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:500,color:"#1a1a1a"}}>{entry.desc}</div>
+                  <div style={{fontSize:11,color:"#bbb",marginTop:3}}>{entry.date}</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:12}}>
+                  <div style={{color:entry.type==="gelir"?"#1e8449":"#c0392b",fontWeight:700,fontSize:15}}>
+                    {entry.type==="gelir"?"+":"-"}{fmt(entry.amount)}
+                  </div>
+                  {!locked&&<button onClick={()=>delEntry(pIdx,entry.id)} style={{
+                    background:"none",border:"none",color:"#ccc",
+                    cursor:"pointer",fontSize:20,padding:0,lineHeight:1}}>×</button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Hesabım */}
+        {subTab==="hesap"&&(
+          <div style={{padding:16}}>
+            <div style={{background:"#fff",border:`1px solid ${bd}`,borderRadius:14,
+              padding:"20px 18px",marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+              <div style={{fontSize:11,color:ac,letterSpacing:2,marginBottom:16,fontWeight:600}}>
+                {names[pIdx]?.toUpperCase()} — {aktifDonem?.name?.toUpperCase()}
+              </div>
+              {[["Topladığım Gelir",fmt(r.inc),"#1e8449"],
+                ["Yaptığım Gider",fmt(r.exp),"#c0392b"],
+                ["Kişi Başı Net Pay",fmt(r.perPerson),"#d4ac0d"],
+                ["Toplam Alacağım",fmt(r.toReceive),"#1a5276"]
+              ].map(([lbl,val,col],i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",
+                  alignItems:"center",padding:"11px 0",
+                  borderBottom:i<3?"1px solid #f5f3ef":"none"}}>
+                  <span style={{color:"#888",fontSize:14}}>{lbl}</span>
+                  <span style={{color:col,fontWeight:700,fontSize:15}}>{val}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{padding:18,borderRadius:14,fontSize:16,textAlign:"center",fontWeight:700,
+              background:r.balance>0.01?"#f0faf3":r.balance<-0.01?"#fdf2f2":"#f9f8f6",
+              border:`1.5px solid ${r.balance>0.01?"#a9dfbf":r.balance<-0.01?"#f5c6c2":"#ede9e3"}`,
+              color:r.balance>0.01?"#1e8449":r.balance<-0.01?"#c0392b":"#888"}}>
+              {r.balance>0.01?`💰 Kasadan ${fmt(r.balance)} alacaksın`
+               :r.balance<-0.01?`💸 Kasaya ${fmt(Math.abs(r.balance))} ödeyeceksin`
+               :"✅ Hesap tamam"}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── HESAP ÖZETİ EKRANI ──
+  if(screen==="ozet"){
+    return (
+      <div style={{minHeight:"100vh",background:"#f5f3ef",paddingBottom:80}}>
+        {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",
+          background:toast.color,color:"#fff",padding:"10px 20px",borderRadius:20,
+          fontSize:13,fontWeight:500,zIndex:999,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
+          whiteSpace:"nowrap"}}>{toast.msg}</div>}
+
+        {/* Header */}
+        <div style={{background:"#fff",borderBottom:"1px solid #e8e4de",padding:"14px 16px",
+          position:"sticky",top:0,zIndex:20,boxShadow:"0 1px 8px rgba(0,0,0,0.06)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <button onClick={()=>setScreen("home")}
+              style={{background:"none",border:"none",color:"#1a5276",cursor:"pointer",
+                fontSize:14,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+              ← Ana Ekran
+            </button>
+            <div className="playfair" style={{fontSize:15,fontWeight:700}}>Hesap Özeti</div>
+            <div style={{display:"flex",gap:5,alignItems:"center"}}>
+              {syncing&&<span style={{fontSize:10,color:"#aaa"}}>↑</span>}
+              <button onClick={()=>setShowArchive(true)}
+                style={{background:"none",border:"1px solid #ddd",borderRadius:8,
+                  color:"#666",padding:"5px 8px",cursor:"pointer",fontSize:12}}>📅</button>
+              <button onClick={exportPDFAktif}
+                style={{background:"none",border:"1px solid #b8d4ed",borderRadius:8,
+                  color:"#1a5276",padding:"5px 8px",cursor:"pointer",fontSize:12}}>📄</button>
+              <button onClick={()=>{setResetModal(true);setResetConfirm("");}}
+                style={{background:"none",border:"1px solid #f5c6c2",borderRadius:8,
+                  color:"#c0392b",padding:"5px 8px",cursor:"pointer",fontSize:12}}>🗑</button>
+            </div>
+          </div>
+          {/* Dönem bilgisi */}
+          {aktifDonem&&(
+            <div style={{marginTop:10,display:"flex",alignItems:"center",justifyContent:"space-between",background:"#f9f8f6",borderRadius:10,padding:"8px 14px"}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{aktifDonem.name}</div>
+                <div style={{fontSize:11,color:"#aaa"}}>{aktifDonem.startDate}{aktifDonem.endDate?" → "+aktifDonem.endDate:""}</div>
+              </div>
+              <div style={{fontSize:11,color:aktifDonem.closed?"#c0392b":"#1e8449",fontWeight:600,background:aktifDonem.closed?"#fdf2f2":"#f0faf3",padding:"4px 10px",borderRadius:20,border:`1px solid ${aktifDonem.closed?"#f5c6c2":"#a9dfbf"}`}}>
+                {aktifDonem.closed?"🔒 Kapalı":"🟢 Aktif"}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{padding:"20px 16px"}}>
+          {/* Hero */}
+          <div style={{background:"#1a1a1a",borderRadius:16,padding:"20px",
+            marginBottom:20,position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",right:-20,top:-20,fontSize:80,opacity:0.05}}>⚖️</div>
+            <div style={{fontSize:11,color:"#888",letterSpacing:2,marginBottom:6}}>{aktifDonem?.name?.toUpperCase()}</div>
+            <div className="playfair" style={{fontSize:28,color:"#fff",fontWeight:700,marginBottom:4}}>
+              {fmt(summary.totalIncome)}
+            </div>
+            <div style={{fontSize:12,color:"#888",marginBottom:14}}>toplam gelir</div>
+            <div style={{display:"flex",gap:16}}>
+              {[["Gider",fmt(summary.totalExpense),"#e74c3c"],
+                ["Net",fmt(summary.netShare),"#2ecc71"],
+                ["Kişi Başı",fmt(summary.perPerson),"#f39c12"]].map(([l,v,c])=>(
+                <div key={l}>
+                  <div style={{fontSize:11,color:"#666",marginBottom:2}}>{l}</div>
+                  <div style={{fontSize:14,color:c,fontWeight:600}}>{v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Grafik */}
+          <BarChart stats={summary.stats} names={names}/>
+
+          {/* Trend */}
+          {/* Ortak kartları */}
+          {[0,1,2].map(i=>{
+            const ac=ACCENT[i],lt=LIGHT[i],bd=BORDER[i],r=summary.results[i];
+            return (
+              <div key={i} style={{background:"#fff",border:`1px solid ${bd}`,
+                borderRadius:14,padding:"16px 18px",marginBottom:12,
+                boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:36,height:36,borderRadius:"50%",background:lt,
+                      border:`2px solid ${bd}`,display:"flex",alignItems:"center",
+                      justifyContent:"center",fontSize:14,color:ac,fontWeight:700}}>
+                      {names[i][0]}
+                    </div>
+                    <div>
+                      <div className="playfair" style={{fontWeight:600,fontSize:15,color:"#1a1a1a"}}>{names[i]}</div>
+                      <div style={{fontSize:11,color:"#aaa",marginTop:1}}>{getEntries(i).length} kayıt</div>
+                    </div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:11,color:"#aaa",marginBottom:2}}>
+                      {r.balance>0.01?"alacak":r.balance<-0.01?"ödeyecek":"tamam"}
+                    </div>
+                    <div style={{fontSize:17,fontWeight:700,
+                      color:r.balance>0.01?"#1e8449":r.balance<-0.01?"#c0392b":"#888"}}>
+                      {r.balance>0.01?"+":""}{fmt(r.balance)}
+                    </div>
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:8,marginBottom:10}}>
+                  {[["Topladığı",fmt(r.inc),"#1e8449"],
+                    ["Harcadığı",fmt(r.exp),"#c0392b"],
+                    ["Alacağı",fmt(r.toReceive),"#d4ac0d"]].map(([lbl,val,col])=>(
+                    <div key={lbl} style={{flex:1,background:"#f9f8f6",borderRadius:8,
+                      padding:"8px 10px",border:"1px solid #ede9e3"}}>
+                      <div style={{fontSize:10,color:"#aaa",marginBottom:3}}>{lbl}</div>
+                      <div style={{color:col,fontWeight:600,fontSize:11}}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{padding:"8px 12px",borderRadius:8,fontSize:13,textAlign:"center",fontWeight:500,
+                  background:r.balance>0.01?"#f0faf3":r.balance<-0.01?"#fdf2f2":"#f9f8f6",
+                  color:r.balance>0.01?"#1e8449":r.balance<-0.01?"#c0392b":"#888",
+                  border:`1px solid ${r.balance>0.01?"#a9dfbf":r.balance<-0.01?"#f5c6c2":"#ede9e3"}`}}>
+                  {r.balance>0.01?`Kasadan ${fmt(r.balance)} alacak`
+                   :r.balance<-0.01?`Kasaya ${fmt(Math.abs(r.balance))} ödeyecek`
+                   :"Hesap tamam ✓"}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* PDF butonu */}
+          <button onClick={exportPDFAktif} style={{
+            width:"100%",background:"#1a5276",border:"none",borderRadius:12,
+            padding:"14px",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:600,
+            marginBottom:10,boxShadow:"0 4px 12px rgba(26,82,118,0.3)"}}>
+            📄 PDF İndir
+          </button>
+          {!aktifDonem?.closed&&(
+            <button onClick={()=>setShowCloseConfirm(true)} style={{
+              width:"100%",background:"#fff",border:"2px solid #c0392b",borderRadius:12,
+              padding:"14px",color:"#c0392b",cursor:"pointer",fontSize:14,fontWeight:600}}>
+              🔒 Dönemi Kapat ve Hesapla
+            </button>
+          )}
+        </div>
+
+        {/* ARŞİV */}
+        {showArchive&&(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
+            display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}}>
+            <div style={{background:"#fff",borderRadius:"20px 20px 0 0",padding:"24px 20px",
+              width:"100%",maxWidth:480,maxHeight:"75vh",display:"flex",flexDirection:"column",
+              boxShadow:"0 -8px 40px rgba(0,0,0,0.2)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+                <div className="playfair" style={{fontSize:17,fontWeight:700}}>📅 Dönem Arşivi</div>
+                <button onClick={()=>setShowArchive(false)}
+                  style={{background:"none",border:"none",fontSize:22,color:"#aaa",cursor:"pointer"}}>×</button>
+              </div>
+              <div style={{overflowY:"auto",flex:1}}>
+                {(!donemler||donemler.length===0)&&(
+                  <div style={{textAlign:"center",color:"#ccc",padding:"30px 0",fontSize:14}}>Kayıtlı dönem yok</div>
+                )}
+                {donemler&&[...donemler].reverse().map(d=>{
+                  const s=calcSummary(d);const isAktif=!d.closed;
+                  return(
+                    <div key={d.id} style={{background:isAktif?"#f0faf3":"#f9f8f6",border:`1px solid ${isAktif?"#a9dfbf":"#ede9e3"}`,borderRadius:12,padding:"14px 16px",marginBottom:8}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                        <div>
+                          <div className="playfair" style={{fontSize:15,fontWeight:600}}>{d.name}</div>
+                          <div style={{fontSize:11,color:"#aaa"}}>{d.startDate}{d.endDate?" → "+d.endDate:""}</div>
+                        </div>
+                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                          <div style={{fontSize:11,color:isAktif?"#1e8449":"#888",fontWeight:600}}>{isAktif?"🟢 Aktif":"🔒 Kapalı"}</div>
+                          <button onClick={()=>exportPDFDonem(d)} style={{background:"none",border:"1px solid #b8d4ed",borderRadius:8,color:"#1a5276",padding:"4px 8px",cursor:"pointer",fontSize:11}}>PDF</button>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:12}}>
+                        <span style={{fontSize:12,color:"#1e8449",fontWeight:600}}>{fmt(s.totalIncome)}</span>
+                        <span style={{fontSize:12,color:"#c0392b"}}>−{fmt(s.totalExpense)}</span>
+                        <span style={{fontSize:12,color:"#1a5276"}}>Net: {fmt(s.netShare)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DÖNEM KAPAT */}
+        {showCloseConfirm&&(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
+            <div style={{background:"#fff",borderRadius:20,padding:28,width:"90%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+              <div style={{fontSize:32,textAlign:"center",marginBottom:10}}>🔒</div>
+              <div className="playfair" style={{fontSize:18,fontWeight:700,textAlign:"center",marginBottom:8}}>Dönemi Kapat</div>
+              <div style={{fontSize:13,color:"#888",textAlign:"center",marginBottom:12,lineHeight:1.7}}><strong style={{color:"#1a1a1a"}}>{aktifDonem?.name}</strong> dönemi kapatılacak.</div>
+              <div style={{background:"#f0faf3",border:"1px solid #a9dfbf",borderRadius:10,padding:"12px 14px",marginBottom:20,fontSize:13,lineHeight:1.8}}>
+                ✅ PDF raporu otomatik indirilecek<br/>
+                ✅ Dönem kilitlenecek (yeni kayıt girilmez)<br/>
+                ✅ Arşivde görüntülenmeye devam eder
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={donemKapat} style={{flex:1,background:"#c0392b",border:"none",borderRadius:10,padding:13,color:"#fff",cursor:"pointer",fontSize:14,fontWeight:600}}>Onayla ve Kapat</button>
+                <button onClick={()=>setShowCloseConfirm(false)} style={{flex:1,background:"#f5f3ef",border:"none",borderRadius:10,padding:13,color:"#555",cursor:"pointer",fontSize:14}}>İptal</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SIFIRLAMA */}
+        {resetModal&&(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
+            display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
+            <div style={{background:"#fff",borderRadius:20,padding:28,
+              width:"90%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+              <div style={{fontSize:32,textAlign:"center",marginBottom:10}}>⚠️</div>
+              <div className="playfair" style={{fontSize:18,fontWeight:700,textAlign:"center",
+                marginBottom:8}}>Veri Sıfırlama</div>
+              <div style={{fontSize:13,color:"#888",textAlign:"center",marginBottom:20,lineHeight:1.7}}>
+                <strong style={{color:"#c0392b"}}>{aktifDonem?.name}</strong> dönemindeki tüm
+                kayıtlar silinecek.<br/>Devam için <strong>SIFIRLA</strong> yazın.
+              </div>
+              <input value={resetConfirm}
+                onChange={e=>setResetConfirm(e.target.value.toUpperCase())}
+                placeholder="SIFIRLA yazın..."
+                style={{width:"100%",background:"#f9f8f6",border:"1px solid #ede9e3",
+                  borderRadius:8,padding:"11px 13px",fontSize:14,marginBottom:14,
+                  textAlign:"center",letterSpacing:2}}/>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={doReset} disabled={resetConfirm!=="SIFIRLA"}
+                  style={{flex:1,background:resetConfirm==="SIFIRLA"?"#c0392b":"#f5c6c2",
+                    border:"none",borderRadius:10,padding:13,color:"#fff",
+                    cursor:resetConfirm==="SIFIRLA"?"pointer":"not-allowed",
+                    fontSize:14,fontWeight:600}}>Sıfırla</button>
+                <button onClick={()=>{setResetModal(false);setResetConfirm("");}}
+                  style={{flex:1,background:"#f5f3ef",border:"none",borderRadius:10,
+                    padding:13,color:"#555",cursor:"pointer",fontSize:14}}>İptal</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════
+  // ANA EKRAN
+  // ══════════════════════════════════════
+  return (
+    <div style={{minHeight:"100vh",background:"#f5f3ef"}}>
+      {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",
+        background:toast.color,color:"#fff",padding:"10px 20px",borderRadius:20,
+        fontSize:13,fontWeight:500,zIndex:999,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
+        whiteSpace:"nowrap"}}>{toast.msg}</div>}
+
+      {/* Ana ekran header */}
+      <div style={{background:"#1a1a1a",padding:"48px 24px 36px",
+        position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",right:-30,top:-30,fontSize:120,opacity:0.04}}>⚖️</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div>
+            <div className="playfair" style={{fontSize:26,fontWeight:700,color:"#fff",
+              letterSpacing:0.5,lineHeight:1.2}}>MADALYON</div>
+            <div style={{fontSize:11,color:"#888",letterSpacing:3,marginTop:3}}>HUKUK BÜROSU</div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>{setEditingNames(true);setTempNames(names);}}
+              style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",
+                borderRadius:8,color:"#aaa",padding:"6px 10px",cursor:"pointer",fontSize:12}}>✏️</button>
+          </div>
+        </div>
+
+        {/* Dönem bilgisi ana ekranda */}
+        {aktifDonem&&(
+          <div style={{marginTop:20,background:"rgba(255,255,255,0.07)",borderRadius:12,padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:13,color:"#fff",fontWeight:600}}>{aktifDonem.name}</div>
+              <div style={{fontSize:11,color:"#888",marginTop:1}}>{aktifDonem.startDate}{aktifDonem.endDate?" → "+aktifDonem.endDate:""}</div>
+            </div>
+            <div style={{fontSize:11,color:aktifDonem.closed?"#e74c3c":"#2ecc71",fontWeight:600}}>{aktifDonem.closed?"🔒 Kapalı":"🟢 Aktif"}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Ana kartlar */}
+      <div style={{padding:"20px 16px",display:"flex",flexDirection:"column",gap:12}}>
+
+        {/* Yeni Dönem butonu - sadece aktif dönem yoksa veya kapandıysa */}
+        {(!aktifDonem||aktifDonem.closed)&&(
+          <button onClick={()=>setShowNewDonem(true)} style={{
+            background:"#1e8449",border:"none",borderRadius:14,padding:"16px 22px",
+            cursor:"pointer",textAlign:"left",color:"#fff",
+            boxShadow:"0 4px 16px rgba(30,132,73,0.3)"}}>
+            <div style={{fontSize:18,marginBottom:4}}>＋ Yeni Dönem Aç</div>
+            <div style={{fontSize:12,color:"rgba(255,255,255,0.7)"}}>Yeni bir hesap dönemi başlat</div>
+          </button>
+        )}
+
+        {/* Hesap Özeti kartı */}
+        <button onClick={()=>setScreen("ozet")} style={{
+          background:"#1a5276",border:"none",borderRadius:16,
+          padding:"22px 22px",cursor:"pointer",textAlign:"left",
+          boxShadow:"0 4px 20px rgba(26,82,118,0.3)",
+          position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",right:-10,top:-10,fontSize:60,opacity:0.1}}>📊</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",letterSpacing:2,marginBottom:8,fontWeight:500}}>
+            {aktifDonem?.closed?"KAPALI DÖNEM":"AKTİF DÖNEM"}
+          </div>
+          <div className="playfair" style={{fontSize:20,fontWeight:700,color:"#fff",marginBottom:6}}>
+            Hesap Özeti
+          </div>
+          <div style={{display:"flex",gap:20,marginTop:4}}>
+            <div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginBottom:2}}>Net</div>
+              <div style={{fontSize:14,color:"#2ecc71",fontWeight:600}}>{fmt(summary.netShare)}</div>
+            </div>
+            <div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginBottom:2}}>Kişi başı</div>
+              <div style={{fontSize:14,color:"#f39c12",fontWeight:600}}>{fmt(summary.perPerson)}</div>
+            </div>
+          </div>
+          <div style={{position:"absolute",right:20,top:"50%",transform:"translateY(-50%)",
+            color:"rgba(255,255,255,0.4)",fontSize:20}}>›</div>
+        </button>
+
+        {/* Ortak kartları */}
+        {[0,1,2].map(i=>{
+          const ac=ACCENT[i],lt=LIGHT[i],bd=BORDER[i],r=summary.results[i];
+          const totalEntries=getEntries(i).length;
+          return (
+            <button key={i} onClick={()=>{setScreen("ortak-"+i);setSubTab("kayitlar");}} style={{
+              background:"#fff",border:`1px solid ${bd}`,borderRadius:16,
+              padding:"20px 22px",cursor:"pointer",textAlign:"left",
+              boxShadow:"0 2px 12px rgba(0,0,0,0.06)",
+              position:"relative",overflow:"hidden"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:14}}>
+                  <div style={{width:46,height:46,borderRadius:"50%",background:lt,
+                    border:`2px solid ${bd}`,display:"flex",alignItems:"center",
+                    justifyContent:"center",fontSize:18,color:ac,fontWeight:700}}>
+                    {names[i][0]}
+                  </div>
+                  <div>
+                    <div className="playfair" style={{fontSize:18,fontWeight:700,color:"#1a1a1a"}}>
+                      {names[i]}
+                    </div>
+                    <div style={{fontSize:11,color:"#aaa",marginTop:2}}>
+                      {totalEntries} kayıt
+                    </div>
+                  </div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:11,color:"#aaa",marginBottom:3}}>
+                    {r.balance>0.01?"alacak":r.balance<-0.01?"ödeyecek":"tamam"}
+                  </div>
+                  <div style={{fontSize:18,fontWeight:700,
+                    color:r.balance>0.01?"#1e8449":r.balance<-0.01?"#c0392b":"#888"}}>
+                    {r.balance>0.01?"+":""}{fmt(r.balance)}
+                  </div>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:10,marginTop:14}}>
+                <div style={{flex:1,background:"#f9f8f6",borderRadius:8,padding:"8px 10px",border:"1px solid #ede9e3"}}>
+                  <div style={{fontSize:10,color:"#aaa",marginBottom:2}}>Gelir</div>
+                  <div style={{color:"#1e8449",fontWeight:600,fontSize:12}}>{fmt(r.inc)}</div>
+                </div>
+                <div style={{flex:1,background:"#f9f8f6",borderRadius:8,padding:"8px 10px",border:"1px solid #ede9e3"}}>
+                  <div style={{fontSize:10,color:"#aaa",marginBottom:2}}>Gider</div>
+                  <div style={{color:"#c0392b",fontWeight:600,fontSize:12}}>{fmt(r.exp)}</div>
+                </div>
+                <div style={{flex:1,background:"#f9f8f6",borderRadius:8,padding:"8px 10px",border:"1px solid #ede9e3"}}>
+                  <div style={{fontSize:10,color:"#aaa",marginBottom:2}}>Alacak</div>
+                  <div style={{color:"#d4ac0d",fontWeight:600,fontSize:12}}>{fmt(r.toReceive)}</div>
+                </div>
+              </div>
+              <div style={{position:"absolute",right:16,top:20,color:"#ddd",fontSize:18}}>›</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* YENİ DÖNEM MODAL */}
+      {showNewDonem&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
+          <div style={{background:"#fff",borderRadius:20,padding:28,width:"90%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+            <div className="playfair" style={{fontSize:18,fontWeight:700,marginBottom:6}}>Yeni Dönem</div>
+            <div style={{fontSize:13,color:"#888",marginBottom:20,lineHeight:1.6}}>Bu dönem için bir isim girin.<br/><span style={{color:"#aaa",fontSize:12}}>Örn: "1-15 Mart", "Nisan İlk Yarı"</span></div>
+            <input value={newDonemName} onChange={e=>setNewDonemName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")yeniDonemAc();}} placeholder="Dönem adı..." autoFocus style={{width:"100%",background:"#f9f8f6",border:"1px solid #ede9e3",borderRadius:8,padding:"12px 14px",color:"#1a1a1a",fontSize:15,marginBottom:10}}/>
+            <div style={{fontSize:11,color:"#aaa",marginBottom:16}}>Başlangıç tarihi: {new Date().toLocaleDateString("tr-TR")}</div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={yeniDonemAc} style={{flex:1,background:"#1e8449",border:"none",borderRadius:10,padding:13,color:"#fff",cursor:"pointer",fontSize:14,fontWeight:600}}>Dönemi Aç</button>
+              <button onClick={()=>{setShowNewDonem(false);setNewDonemName("");}} style={{flex:1,background:"#f5f3ef",border:"none",borderRadius:10,padding:13,color:"#555",cursor:"pointer",fontSize:14}}>İptal</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* İSİM DÜZENLEME */}
+      {editingNames&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
+          display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
+          <div style={{background:"#fff",borderRadius:20,padding:28,
+            width:"90%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+            <div className="playfair" style={{fontSize:17,fontWeight:700,marginBottom:20}}>
+              Ortak İsimlerini Düzenle
+            </div>
+            {tempNames.map((n,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:LIGHT[i],
+                  border:`1.5px solid ${BORDER[i]}`,display:"flex",alignItems:"center",
+                  justifyContent:"center",fontSize:13,color:ACCENT[i],fontWeight:700,flexShrink:0}}>
+                  {n[0]||"?"}
+                </div>
+                <input value={n}
+                  onChange={e=>{const nn=[...tempNames];nn[i]=e.target.value;setTempNames(nn);}}
+                  style={{flex:1,background:"#f9f8f6",border:"1px solid #ede9e3",borderRadius:8,
+                    padding:"10px 13px",color:"#1a1a1a",fontSize:14}}/>
+              </div>
+            ))}
+            <div style={{display:"flex",gap:10,marginTop:14}}>
+              <button onClick={()=>{setNames(tempNames);setEditingNames(false);
+                fbSave("buro/names",tempNames);showToast("✓ İsimler güncellendi");}}
+                style={{flex:1,background:"#1a1a1a",border:"none",borderRadius:10,
+                  padding:13,color:"#fff",cursor:"pointer",fontSize:14,fontWeight:600}}>Kaydet</button>
+              <button onClick={()=>{setEditingNames(false);setTempNames(names);}}
+                style={{flex:1,background:"#f5f3ef",border:"none",borderRadius:10,
+                  padding:13,color:"#555",cursor:"pointer",fontSize:14}}>İptal</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
