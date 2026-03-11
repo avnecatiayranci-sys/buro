@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Büro" />
+  <title>Hukuk Bürosu</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <!-- Firebase -->
+  <script type="module" id="firebase-init">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDGTijJZWADo26rjl1s_r1QSURhDeH_i6E",
+      authDomain: "madalyon-hesap.firebaseapp.com",
+      databaseURL: "https://madalyon-hesap-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "madalyon-hesap",
+      storageBucket: "madalyon-hesap.firebasestorage.app",
+      messagingSenderId: "1054387495626",
+      appId: "1:1054387495626:web:3db7c0135f9f8965438a33"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+
+    window.__fbDb  = db;
+    window.__fbRef = ref;
+    window.__fbSet = set;
+    window.__fbOn  = onValue;
+    window.__fbReady = true;
+    window.dispatchEvent(new Event("fb-ready"));
+  </script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    body { background:#0a0a0f; font-family:Georgia,serif; color:#fff; }
+    input { outline:none; }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; }
+    ::-webkit-scrollbar { width:0; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-type="module">
+const { useState, useEffect, useCallback } = React;
+
+const DEFAULT_NAMES = ["Ortak 1", "Ortak 2", "Ortak 3"];
+const ACCENT = ["#e94560", "#f5a623", "#0f9b8e"];
+const BG     = ["#1a1a2e", "#0f3460", "#16213e"];
+const MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran",
+                "Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+
+const now = new Date();
+const defaultMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+
+function fmt(n) {
+  return n.toLocaleString("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2})+" ₺";
+}
+function monthLabel(ym) {
+  const [y,m] = ym.split("-");
+  return `${MONTHS[parseInt(m)-1]} ${y}`;
+}
+
+// Firebase helpers — güvenli şekilde window üzerinden çağır
+function fbSave(path, value) {
+  if (!window.__fbReady) return;
+  const r = window.__fbRef(window.__fbDb, path);
+  window.__fbSet(r, value);
+}
+function fbListen(path, cb) {
+  if (!window.__fbReady) return () => {};
+  const r = window.__fbRef(window.__fbDb, path);
+  const unsub = window.__fbOn(r, snap => cb(snap.val()));
+  return unsub;
+}
+
+function App() {
+  const [data,         setData]         = useState({});
+  const [names,        setNames]        = useState(DEFAULT_NAMES);
+  const [month,        setMonth]        = useState(defaultMonth);
+  const [tab,          setTab]          = useState("ozet");
+  const [subTab,       setSubTab]       = useState("kayitlar");
+  const [form,         setForm]         = useState({type:"gelir",desc:"",amount:""});
+  const [editingNames, setEditingNames] = useState(false);
+  const [tempNames,    setTempNames]    = useState(DEFAULT_NAMES);
+  const [fbReady,      setFbReady]      = useState(!!window.__fbReady);
+  const [syncing,      setSyncing]      = useState(false);
+
+  // Firebase hazır olunca dinlemeye başla
+  useEffect(() => {
+    function startListening() {
+      setFbReady(true);
+      // Verileri dinle
+      const unsubData = fbListen("buro/data", val => {
+        setData(val || {});
+      });
+      const unsubNames = fbListen("buro/names", val => {
+        if (val) { setNames(val); setTempNames(val); }
+      });
+      return () => { if(unsubData) unsubData(); if(unsubNames) unsubNames(); };
+    }
+
+    if (window.__fbReady) {
+      return startListening();
+    } else {
+      const handler = () => startListening();
+      window.addEventListener("fb-ready", handler);
+      return () => window.removeEventListener("fb-ready", handler);
+    }
+  }, []);
+
+  function saveData(nd) {
+    setSyncing(true);
+    fbSave("buro/data", nd);
+    setTimeout(() => setSyncing(false), 800);
+  }
+  function saveNames(nn) {
+    fbSave("buro/names", nn);
+  }
+
+  function getEntries(i, m) { return data?.[m]?.[i] || []; }
+
+  function addEntry(pIdx) {
+    const amount = parseFloat(form.amount);
+    if (!form.desc.trim() || !form.amount || isNaN(amount)) return;
+    const entry = { id: Date.now(), type: form.type, desc: form.desc.trim(),
+                    amount, date: new Date().toLocaleDateString("tr-TR") };
+    const nd = JSON.parse(JSON.stringify(data));
+    if (!nd[month]) nd[month] = {};
+    if (!nd[month][pIdx]) nd[month][pIdx] = [];
+    nd[month][pIdx].push(entry);
+    setData(nd); saveData(nd);
+    setForm({type:"gelir", desc:"", amount:""});
+  }
+
+  function delEntry(pIdx, id) {
+    const nd = JSON.parse(JSON.stringify(data));
+    if (nd[month]?.[pIdx]) {
+      nd[month][pIdx] = nd[month][pIdx].filter(e => e.id !== id);
+    }
+    setData(nd); saveData(nd);
+  }
+
+  function calcSummary(m) {
+    let totalIncome=0, totalExpense=0;
+    const stats = [0,1,2].map(i => {
+      const inc = getEntries(i,m).filter(e=>e.type==="gelir").reduce((s,e)=>s+e.amount,0);
+      const exp = getEntries(i,m).filter(e=>e.type==="gider").reduce((s,e)=>s+e.amount,0);
+      totalIncome  += inc;
+      totalExpense += exp;
+      return {inc, exp};
+    });
+    const netShare  = totalIncome - totalExpense;
+    const perPerson = netShare / 3;
+    const results   = [0,1,2].map(i => {
+      const toReceive = perPerson + stats[i].exp;
+      const balance   = toReceive - stats[i].inc;
+      return {...stats[i], toReceive, balance, perPerson};
+    });
+    return {totalIncome, totalExpense, netShare, perPerson, results};
+  }
+
+  const summary = calcSummary(month);
+  const pIdx    = tab==="ozet" ? null : parseInt(tab);
+
+  // ── LOADING ──
+  if (!fbReady) return (
+    <div style={{minHeight:"100vh",background:"#0a0a0f",display:"flex",
+      alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif",color:"#fff"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:40,marginBottom:12}}>⚖️</div>
+        <div style={{color:"#888",fontSize:14}}>Sunucuya bağlanıyor...</div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#0a0a0f,#0f0f1e)",paddingBottom:80}}>
+
+      {/* HEADER */}
+      <div style={{background:"#0d0d18",borderBottom:"1px solid #1a1a2e",
+        padding:"14px 16px 0",position:"sticky",top:0,zIndex:20}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:20}}>⚖️</span>
+            <span style={{fontSize:14,fontWeight:"bold",letterSpacing:1}}>HUKUK BÜROSU</span>
+          </div>
+          {/* Ay navigasyonu */}
+          <div style={{display:"flex",alignItems:"center",gap:5}}>
+            <button onClick={() => {
+              const [y,m2]=month.split("-").map(Number);
+              const d=new Date(y,m2-2);
+              setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+            }} style={{background:"none",border:"none",color:"#777",cursor:"pointer",fontSize:22,padding:"0 2px"}}>‹</button>
+            <span style={{fontSize:12,color:"#ccc",minWidth:96,textAlign:"center"}}>{monthLabel(month)}</span>
+            <button onClick={() => {
+              const [y,m2]=month.split("-").map(Number);
+              const d=new Date(y,m2);
+              setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+            }} style={{background:"none",border:"none",color:"#777",cursor:"pointer",fontSize:22,padding:"0 2px"}}>›</button>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {syncing && <span style={{fontSize:11,color:"#555"}}>↑ kaydediliyor</span>}
+            <button onClick={()=>{setEditingNames(true);setTempNames(names);}}
+              style={{background:"none",border:"1px solid #333",borderRadius:6,
+                color:"#666",padding:"5px 9px",cursor:"pointer",fontSize:12}}>✏️</button>
+          </div>
+        </div>
+
+        {/* Üst sekmeler */}
+        <div style={{display:"flex"}}>
+          {["ozet","0","1","2"].map(t => {
+            const lbl    = t==="ozet" ? "📊 Özet" : names[parseInt(t)];
+            const ac     = t==="ozet" ? "#c8bfaf" : ACCENT[parseInt(t)];
+            const active = tab===t;
+            return (
+              <button key={t} onClick={()=>setTab(t)} style={{
+                flex:1,background:"none",border:"none",
+                borderBottom:active?`2.5px solid ${ac}`:"2.5px solid transparent",
+                color:active?ac:"#444",
+                padding:"9px 3px",cursor:"pointer",
+                fontSize:12,fontFamily:"Georgia,serif",
+                fontWeight:active?"bold":"normal",
+                whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"
+              }}>{lbl}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ══ ÖZET ══ */}
+      {tab==="ozet" && (
+        <div style={{padding:"20px 16px"}}>
+          <div style={{fontSize:11,color:"#555",letterSpacing:2,marginBottom:16}}>
+            HESAP ÖZETİ — {monthLabel(month).toUpperCase()}
+          </div>
+
+          {[0,1,2].map(i => {
+            const ac=ACCENT[i], r=summary.results[i];
+            return (
+              <div key={i} style={{background:`${BG[i]}99`,border:`1px solid ${ac}33`,
+                borderRadius:14,padding:"16px 18px",marginBottom:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:34,height:34,borderRadius:"50%",
+                      background:`${ac}22`,border:`1.5px solid ${ac}`,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:12,color:ac,fontWeight:"bold"}}>
+                      {names[i].split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}
+                    </div>
+                    <div style={{fontWeight:"bold",fontSize:15,color:ac}}>{names[i]}</div>
+                  </div>
+                  <div style={{fontSize:17,fontWeight:"bold",
+                    color:r.balance>=0?"#4ade80":"#f87171"}}>
+                    {r.balance>=0?"+":""}{fmt(r.balance)}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:8,marginBottom:10}}>
+                  {[["Topladığı",fmt(r.inc),"#4ade80"],
+                    ["Harcadığı",fmt(r.exp),"#f87171"],
+                    ["Alacağı",fmt(r.toReceive),"#facc15"]].map(([lbl,val,col])=>(
+                    <div key={lbl} style={{flex:1,background:"#0a0a0f",borderRadius:8,padding:"8px 10px",fontSize:11}}>
+                      <div style={{color:"#555",marginBottom:3}}>{lbl}</div>
+                      <div style={{color:col,fontWeight:"bold"}}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{padding:"8px 12px",borderRadius:8,fontSize:13,textAlign:"center",
+                  background:r.balance>0.01?"#0a2a1a":r.balance<-0.01?"#2a0a0a":"#161616",
+                  color:r.balance>0.01?"#4ade80":r.balance<-0.01?"#f87171":"#666"}}>
+                  {r.balance>0.01?`Kasadan ${fmt(r.balance)} alacak`
+                   :r.balance<-0.01?`Kasaya ${fmt(Math.abs(r.balance))} ödeyecek`
+                   :"Hesap tamam ✓"}
+                </div>
+              </div>
+            );
+          })}
+
+          <div style={{background:"#0a0a1e",border:"1px solid #1a1a3e",borderRadius:14,padding:18,marginTop:4}}>
+            <div style={{fontSize:11,color:"#444",letterSpacing:2,marginBottom:14}}>TOPLAM</div>
+            {[
+              ["Toplam Gelir",      fmt(summary.totalIncome),  "#4ade80"],
+              ["Toplam Gider",      fmt(summary.totalExpense), "#f87171"],
+              ["Net Dağıtılacak",   fmt(summary.netShare),     "#facc15"],
+              ["Kişi Başı Net Pay", fmt(summary.perPerson),    "#a78bfa"],
+            ].map(([lbl,val,col],i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",
+                marginBottom:i<3?10:0,paddingBottom:i===2?10:0,
+                borderBottom:i===2?"1px solid #1a1a3e":i<2?"1px solid #111":"none"}}>
+                <span style={{color:"#777",fontSize:14}}>{lbl}</span>
+                <span style={{color:col,fontWeight:"bold",fontSize:14}}>{val}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:10,
+            padding:"11px 14px",marginTop:10,fontSize:12,color:"#444",lineHeight:1.9}}>
+            📌 Net Dağıtılacak = Toplam Gelir − Toplam Gider &nbsp;|&nbsp;
+            Alacak = Kişi başı pay + Kendi giderleri
+          </div>
+        </div>
+      )}
+
+      {/* ══ ORTAK SEKMELERİ ══ */}
+      {tab!=="ozet" && pIdx!==null && (() => {
+        const ac=ACCENT[pIdx];
+        const myEntries=getEntries(pIdx,month);
+        const myInc=myEntries.filter(e=>e.type==="gelir").reduce((s,e)=>s+e.amount,0);
+        const myExp=myEntries.filter(e=>e.type==="gider").reduce((s,e)=>s+e.amount,0);
+        const r=summary.results[pIdx];
+
+        return (
+          <div>
+            <div style={{padding:"14px 16px 0",background:`${BG[pIdx]}55`,borderBottom:`1px solid ${ac}22`}}>
+              <div style={{display:"flex",gap:10,marginBottom:12}}>
+                <div style={{flex:1,background:"#0a2a1a",borderRadius:10,padding:"10px 14px"}}>
+                  <div style={{fontSize:10,color:"#4ade80",letterSpacing:1,marginBottom:4}}>GELİR</div>
+                  <div style={{fontSize:18,fontWeight:"bold",color:"#4ade80"}}>{fmt(myInc)}</div>
+                </div>
+                <div style={{flex:1,background:"#2a0a0a",borderRadius:10,padding:"10px 14px"}}>
+                  <div style={{fontSize:10,color:"#f87171",letterSpacing:1,marginBottom:4}}>GİDER</div>
+                  <div style={{fontSize:18,fontWeight:"bold",color:"#f87171"}}>{fmt(myExp)}</div>
+                </div>
+              </div>
+              <div style={{display:"flex"}}>
+                {[["kayitlar","📝 Kayıtlar"],["hesap","⚖️ Hesabım"]].map(([k,lbl])=>(
+                  <button key={k} onClick={()=>setSubTab(k)} style={{
+                    flex:1,background:"none",border:"none",
+                    borderBottom:subTab===k?`2px solid ${ac}`:"2px solid transparent",
+                    color:subTab===k?ac:"#444",
+                    padding:"9px 4px",cursor:"pointer",fontSize:13,fontFamily:"Georgia,serif"
+                  }}>{lbl}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Kayıtlar */}
+            {subTab==="kayitlar" && (
+              <div style={{padding:16}}>
+                <div style={{background:"#111",border:`1px solid ${ac}33`,borderRadius:14,padding:16,marginBottom:20}}>
+                  <div style={{fontSize:11,color:ac,letterSpacing:2,marginBottom:12}}>YENİ KAYIT</div>
+                  <div style={{display:"flex",gap:8,marginBottom:10}}>
+                    {["gelir","gider"].map(t=>(
+                      <button key={t} onClick={()=>setForm({...form,type:t})} style={{
+                        flex:1,padding:"10px",borderRadius:8,cursor:"pointer",
+                        border:form.type===t?`1.5px solid ${t==="gelir"?"#4ade80":"#f87171"}`:"1.5px solid #222",
+                        background:form.type===t?(t==="gelir"?"#0a2a1a":"#2a0a0a"):"transparent",
+                        color:form.type===t?(t==="gelir"?"#4ade80":"#f87171"):"#444",
+                        fontFamily:"Georgia,serif",fontSize:14
+                      }}>{t==="gelir"?"↑ Gelir":"↓ Gider"}</button>
+                    ))}
+                  </div>
+                  <input value={form.desc} onChange={e=>setForm({...form,desc:e.target.value})}
+                    placeholder="Açıklama (örn: Dava ücreti, Kırtasiye...)"
+                    style={{width:"100%",background:"#0a0a0f",border:"1px solid #222",
+                      borderRadius:8,padding:"11px 13px",color:"#fff",
+                      fontSize:14,marginBottom:10,fontFamily:"Georgia,serif"}} />
+                  <div style={{display:"flex",gap:10}}>
+                    <input value={form.amount} type="number"
+                      onChange={e=>setForm({...form,amount:e.target.value})}
+                      onKeyDown={e=>{if(e.key==="Enter")addEntry(pIdx);}}
+                      placeholder="Tutar (₺)"
+                      style={{flex:1,background:"#0a0a0f",border:"1px solid #222",
+                        borderRadius:8,padding:"11px 13px",color:"#fff",
+                        fontSize:14,fontFamily:"Georgia,serif"}} />
+                    <button onClick={()=>addEntry(pIdx)} style={{
+                      background:ac,border:"none",borderRadius:8,
+                      padding:"11px 22px",color:"#fff",cursor:"pointer",
+                      fontSize:22,fontWeight:"bold"
+                    }}>+</button>
+                  </div>
+                </div>
+
+                <div style={{fontSize:11,color:"#444",letterSpacing:2,marginBottom:12}}>
+                  {monthLabel(month).toUpperCase()} KAYITLARI
+                </div>
+
+                {myEntries.length===0 && (
+                  <div style={{color:"#2a2a2a",textAlign:"center",padding:"40px 0",fontSize:14}}>
+                    Henüz kayıt yok
+                  </div>
+                )}
+
+                {[...myEntries].reverse().map(entry=>(
+                  <div key={entry.id} style={{
+                    background:entry.type==="gelir"?"#0a2a1a":"#2a0a0a",
+                    border:`1px solid ${entry.type==="gelir"?"#0f5132":"#5a1a1a"}`,
+                    borderRadius:12,padding:"12px 16px",marginBottom:8,
+                    display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{fontSize:14,fontWeight:"bold"}}>{entry.desc}</div>
+                      <div style={{fontSize:12,color:"#444",marginTop:3}}>{entry.date}</div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:12}}>
+                      <div style={{color:entry.type==="gelir"?"#4ade80":"#f87171",fontWeight:"bold",fontSize:15}}>
+                        {entry.type==="gelir"?"+":"-"}{fmt(entry.amount)}
+                      </div>
+                      <button onClick={()=>delEntry(pIdx,entry.id)} style={{
+                        background:"none",border:"none",color:"#444",
+                        cursor:"pointer",fontSize:22,padding:0,lineHeight:1
+                      }}>×</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Hesabım */}
+            {subTab==="hesap" && (
+              <div style={{padding:16}}>
+                <div style={{background:`${BG[pIdx]}99`,border:`1.5px solid ${ac}`,
+                  borderRadius:14,padding:"20px 18px",marginBottom:14}}>
+                  <div style={{fontSize:11,color:ac,letterSpacing:2,marginBottom:16}}>
+                    {names[pIdx].toUpperCase()} — AY SONU
+                  </div>
+                  {[
+                    ["Topladığım Gelir",  fmt(r.inc),       "#4ade80"],
+                    ["Yaptığım Gider",    fmt(r.exp),       "#f87171"],
+                    ["Kişi Başı Net Pay", fmt(r.perPerson), "#a78bfa"],
+                    ["Toplam Alacağım",   fmt(r.toReceive), "#facc15"],
+                  ].map(([lbl,val,col],i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",
+                      marginBottom:i<3?12:0,paddingBottom:i===2?12:0,
+                      borderBottom:i===2?`1px solid ${ac}22`:"none"}}>
+                      <span style={{color:"#777",fontSize:14}}>{lbl}</span>
+                      <span style={{color:col,fontWeight:"bold",fontSize:15}}>{val}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{padding:18,borderRadius:14,fontSize:16,textAlign:"center",fontWeight:"bold",
+                  background:r.balance>0.01?"#0a2a1a":r.balance<-0.01?"#2a0a0a":"#161616",
+                  border:`1px solid ${r.balance>0.01?"#0f5132":r.balance<-0.01?"#5a1a1a":"#1e1e1e"}`,
+                  color:r.balance>0.01?"#4ade80":r.balance<-0.01?"#f87171":"#666"}}>
+                  {r.balance>0.01?`💰 Kasadan ${fmt(r.balance)} alacaksın`
+                   :r.balance<-0.01?`💸 Kasaya ${fmt(Math.abs(r.balance))} ödeyeceksin`
+                   :"✅ Hesap tamam"}
+                </div>
+                <div style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:10,
+                  padding:"11px 14px",marginTop:12,fontSize:12,color:"#444",lineHeight:1.9}}>
+                  📌 Alacağın = Kişi başı pay ({fmt(r.perPerson)}) + Giderlerin ({fmt(r.exp)})
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* İSİM DÜZENLEME */}
+      {editingNames && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",
+          display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
+          <div style={{background:"#1a1a2e",borderRadius:16,padding:28,
+            width:"90%",maxWidth:340,border:"1px solid #333"}}>
+            <h3 style={{color:"#fff",margin:"0 0 20px",fontWeight:"normal",fontSize:16}}>
+              Ortak İsimlerini Düzenle
+            </h3>
+            {tempNames.map((n,i)=>(
+              <input key={i} value={n}
+                onChange={e=>{const nn=[...tempNames];nn[i]=e.target.value;setTempNames(nn);}}
+                style={{display:"block",width:"100%",marginBottom:10,
+                  background:"#0a0a0f",border:"1px solid #333",borderRadius:8,
+                  padding:"10px 14px",color:"#fff",fontSize:15,fontFamily:"Georgia,serif"}} />
+            ))}
+            <div style={{display:"flex",gap:10,marginTop:8}}>
+              <button onClick={()=>{setNames(tempNames);setEditingNames(false);saveNames(tempNames);}}
+                style={{flex:1,background:"#e94560",border:"none",borderRadius:8,
+                  padding:12,color:"#fff",cursor:"pointer",fontSize:14}}>Kaydet</button>
+              <button onClick={()=>{setEditingNames(false);setTempNames(names);}}
+                style={{flex:1,background:"#333",border:"none",borderRadius:8,
+                  padding:12,color:"#fff",cursor:"pointer",fontSize:14}}>İptal</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
