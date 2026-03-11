@@ -57,6 +57,19 @@ const defaultMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2
 function fmt(n) {
   return n.toLocaleString("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2})+" ₺";
 }
+function fmtPDF(n) {
+  return n.toLocaleString("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2})+" TL";
+}
+function trPDF(s) {
+  return String(s)
+    .replace(/İ/g,"I").replace(/ı/g,"i")
+    .replace(/Ğ/g,"G").replace(/ğ/g,"g")
+    .replace(/Ü/g,"U").replace(/ü/g,"u")
+    .replace(/Ş/g,"S").replace(/ş/g,"s")
+    .replace(/Ö/g,"O").replace(/ö/g,"o")
+    .replace(/Ç/g,"C").replace(/ç/g,"c")
+    .replace(/₺/g,"TL");
+}
 function nowStr(){return new Date().toLocaleDateString("tr-TR")+" "+new Date().toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"});}
 function todayStr(){return new Date().toLocaleDateString("tr-TR");}
 function monthLabel(ym) {
@@ -167,6 +180,8 @@ function App() {
   const [showNewDonem,     setShowNewDonem]     = useState(false);
   const [newDonemName,     setNewDonemName]     = useState("");
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [editingEntry,  setEditingEntry]  = useState(null); // {pIdx, entry}
+  const [editForm,      setEditForm]      = useState({desc:"",amount:""});
 
   const [eskiVeri,     setEskiVeri]     = useState(null);
   const [showMigrate,  setShowMigrate]  = useState(false);
@@ -277,6 +292,53 @@ function App() {
     if(nd.data?.[pIdx])nd.data[pIdx]=nd.data[pIdx].filter(e=>e.id!==id);
     saveDonem(nd);setDonemler(donemler.map(d=>d.id===nd.id?nd:d));
   }
+  function editEntry(pIdx, entry){
+    setEditingEntry({pIdx, entry});
+    setEditForm({desc:entry.desc, amount:String(entry.amount)});
+  }
+  function saveEditEntry(){
+    if(!editingEntry||!aktifDonem||aktifDonem.closed)return;
+    const amount=parseFloat(editForm.amount);
+    if(!editForm.desc.trim()||isNaN(amount)||amount<=0)return;
+    const nd=JSON.parse(JSON.stringify(aktifDonem));
+    const {pIdx,entry}=editingEntry;
+    if(nd.data?.[pIdx]){
+      nd.data[pIdx]=nd.data[pIdx].map(e=>e.id===entry.id?{...e,desc:editForm.desc.trim(),amount}:e);
+    }
+    saveDonem(nd);setDonemler(donemler.map(d=>d.id===nd.id?nd:d));
+    setEditingEntry(null);showToast("✓ Kayıt güncellendi");
+  }
+
+  function calcDenklesme(results,names){
+    // Borçlular (balance < 0) alacaklılara (balance > 0) öder
+    const odemeler=[];
+    const borclu=[...results.map((r,i)=>({i,b:r.balance})).filter(x=>x.b<-0.01)].sort((a,b)=>a.b-b.b);
+    const alacakli=[...results.map((r,i)=>({i,b:r.balance})).filter(x=>x.b>0.01)].sort((a,b)=>b.b-a.b);
+    const bc=borclu.map(x=>({...x,rem:-x.b}));
+    const ac=alacakli.map(x=>({...x,rem:x.b}));
+    let bi=0,ai=0;
+    while(bi<bc.length&&ai<ac.length){
+      const miktar=Math.min(bc[bi].rem,ac[ai].rem);
+      if(miktar>0.01) odemeler.push({from:bc[bi].i,to:ac[ai].i,amount:miktar});
+      bc[bi].rem-=miktar; ac[ai].rem-=miktar;
+      if(bc[bi].rem<0.01)bi++;
+      if(ac[ai].rem<0.01)ai++;
+    }
+    return odemeler;
+  }
+
+  // Tüm dönemlerdeki tüm açıklamaları topla (öneri için)
+  function getOneriler(){
+    const set=new Set();
+    if(!donemler)return[];
+    donemler.forEach(d=>{
+      [0,1,2].forEach(i=>{
+        (d.data?.[i]||[]).forEach(e=>{if(e.desc)set.add(e.desc);});
+      });
+    });
+    return [...set];
+  }
+
   function doReset(){
     if(resetConfirm!=="SIFIRLA")return;
     const nd={...aktifDonem,data:{}};saveDonem(nd);setDonemler(donemler.map(d=>d.id===nd.id?nd:d));
@@ -321,18 +383,18 @@ function App() {
     // Header
     fc(26,26,26);doc.rect(0,0,210,32,"F");
     tc(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(13);
-    doc.text("MADALYON HUKUK BUROSU",105,12,{align:"center"});
+    doc.text(trPDF("MADALYON HUKUK BUROSU"),105,12,{align:"center"});
     doc.setFont("helvetica","normal");doc.setFontSize(8.5);tc(180,180,180);
     doc.text(title+"   |   "+dates,105,21,{align:"center"});
-    if(isClosed){fc(30,132,73);doc.roundedRect(86,25,38,6,2,2,"F");tc(255,255,255);doc.setFontSize(6.5);doc.setFont("helvetica","bold");doc.text("KAPALI DONEM",105,29.5,{align:"center"});}
+    if(isClosed){fc(30,132,73);doc.roundedRect(86,25,38,6,2,2,"F");tc(255,255,255);doc.setFontSize(6.5);doc.setFont("helvetica","bold");doc.text(trPDF("KAPALI DONEM"),105,29.5,{align:"center"});}
     y=40;
     // Özet
     fc(245,243,239);doc.roundedRect(ML,y,CW,26,3,3,"F");
     doc.setDrawColor(220,216,210);doc.setLineWidth(0.3);doc.roundedRect(ML,y,CW,26,3,3,"S");
     const thirds=CW/3;
-    [{lbl:"TOPLAM GELIR",val:fmt(s.totalIncome),rgb:[30,132,73],cx:ML+thirds*0.5},
-     {lbl:"TOPLAM GIDER",val:fmt(s.totalExpense),rgb:[192,57,43],cx:ML+thirds*1.5},
-     {lbl:"NET DAGITILACAK",val:fmt(s.netShare),rgb:[26,82,118],cx:ML+thirds*2.5}
+    [{lbl:"TOPLAM GELIR",val:fmtPDF(s.totalIncome),rgb:[30,132,73],cx:ML+thirds*0.5},
+     {lbl:"TOPLAM GIDER",val:fmtPDF(s.totalExpense),rgb:[192,57,43],cx:ML+thirds*1.5},
+     {lbl:"NET DAGITILACAK",val:fmtPDF(s.netShare),rgb:[26,82,118],cx:ML+thirds*2.5}
     ].forEach(({lbl,val,rgb,cx})=>{
       doc.setFont("helvetica","normal");doc.setFontSize(6.5);tc(140,140,140);doc.text(lbl,cx,y+8,{align:"center"});
       doc.setFont("helvetica","bold");doc.setFontSize(9.5);tc(...rgb);doc.text(val,cx,y+19,{align:"center"});
@@ -340,7 +402,7 @@ function App() {
     doc.setDrawColor(210,206,200);doc.line(ML+thirds,y+4,ML+thirds,y+22);doc.line(ML+thirds*2,y+4,ML+thirds*2,y+22);
     y+=32;
     doc.setFont("helvetica","normal");doc.setFontSize(8);tc(120,120,120);
-    doc.text("Kisi basi net pay:  "+fmt(s.perPerson),ML,y);y+=10;
+    doc.text(trPDF("Kisi basi net pay:  ")+fmtPDF(s.perPerson),ML,y);y+=10;
     // Ortak kartları
     const CARD_H=52;
     [0,1,2].forEach(i=>{
@@ -351,22 +413,22 @@ function App() {
       fc(...bgRGB);doc.roundedRect(ML,y,CW,CARD_H,3,3,"F");
       doc.setDrawColor(...bdRGB);doc.setLineWidth(0.4);doc.roundedRect(ML,y,CW,CARD_H,3,3,"S");
       fc(...acRGB);doc.circle(ML+10,y+CARD_H/2,7,"F");
-      tc(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(9);doc.text(names[i][0].toUpperCase(),ML+10,y+CARD_H/2+3.5,{align:"center"});
-      tc(...acRGB);doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text(names[i],ML+21,y+13);
-      [["Toplanan Gelir:",fmt(r.inc),[30,132,73]],["Yapilan Gider:",fmt(r.exp),[192,57,43]],["Toplam Alacagi:",fmt(r.toReceive),[26,82,118]]].forEach(([lbl,val,rgb],ri)=>{
+      tc(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(9);doc.text(trPDF(names[i][0].toUpperCase()),ML+10,y+CARD_H/2+3.5,{align:"center"});
+      tc(...acRGB);doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text(trPDF(names[i]),ML+21,y+13);
+      [[trPDF("Toplanan Gelir:"),fmtPDF(r.inc),[30,132,73]],[trPDF("Yapilan Gider:"),fmtPDF(r.exp),[192,57,43]],[trPDF("Toplam Alacagi:"),fmtPDF(r.toReceive),[26,82,118]]].forEach(([lbl,val,rgb],ri)=>{
         const ry=y+22+(ri*9);tc(100,100,100);doc.setFont("helvetica","normal");doc.setFontSize(8);doc.text(lbl,ML+21,ry);
         tc(...rgb);doc.setFont("helvetica","bold");doc.setFontSize(8);doc.text(val,ML+75,ry);
       });
-      const balTxt=r.balance>0.01?"Kasadan "+fmt(r.balance)+" alacak":r.balance<-0.01?"Kasaya "+fmt(Math.abs(r.balance))+" odeyecek":"Hesap tamam";
+      const balTxt=trPDF(r.balance>0.01?"Kasadan "+fmtPDF(r.balance)+" alacak":r.balance<-0.01?"Kasaya "+fmtPDF(Math.abs(r.balance))+" odeyecek":"Hesap tamam");
       const balRGB=r.balance>0.01?[30,132,73]:r.balance<-0.01?[192,57,43]:[100,100,100];
       const balBg=r.balance>0.01?[240,250,243]:r.balance<-0.01?[253,242,242]:[249,248,246];
-      fc(...balBg);doc.roundedRect(ML+120,y+16,CW-122,20,2,2,"F");
+      fc(...balBg);doc.roundedRect(ML+115,y+14,CW-117,24,2,2,"F");
       tc(...balRGB);doc.setFont("helvetica","bold");doc.setFontSize(7.5);
-      doc.text(balTxt,ML+121+((CW-122)/2),y+28,{align:"center",maxWidth:CW-124});
+      doc.text(balTxt,ML+116+((CW-117)/2),y+26,{align:"center",maxWidth:CW-119});
       y+=CARD_H+6;
     });
     doc.setFont("helvetica","normal");doc.setFontSize(7.5);tc(180,180,180);
-    doc.text("Olusturulma: "+new Date().toLocaleDateString("tr-TR")+"  -  Madalyon Hukuk Burosu",105,287,{align:"center"});
+    doc.text(trPDF("Olusturulma: "+new Date().toLocaleDateString("tr-TR")+"  -  Madalyon Hukuk Burosu"),105,287,{align:"center"});
     return doc;
   }
   function exportPDF(){
@@ -516,10 +578,29 @@ function App() {
                   }}>{t==="gelir"?"↑ Gelir":"↓ Gider"}</button>
                 ))}
               </div>
-              <input value={form.desc} onChange={e=>setForm({...form,desc:e.target.value})}
-                placeholder="Açıklama (örn: Dava ücreti, Kırtasiye...)"
-                style={{width:"100%",background:"#f9f8f6",border:"1px solid #ede9e3",
-                  borderRadius:8,padding:"11px 13px",color:"#1a1a1a",fontSize:14,marginBottom:10}}/>
+              <div style={{position:"relative",marginBottom:10}}>
+                <input value={form.desc} onChange={e=>setForm({...form,desc:e.target.value})}
+                  placeholder="Açıklama (örn: Dava ücreti, Kırtasiye...)"
+                  style={{width:"100%",background:"#f9f8f6",border:"1px solid #ede9e3",
+                    borderRadius:8,padding:"11px 13px",color:"#1a1a1a",fontSize:14}}/>
+                {form.desc.length>1&&(()=>{
+                  const oneri=getOneriler().filter(o=>o.toLowerCase().includes(form.desc.toLowerCase())&&o!==form.desc).slice(0,3);
+                  if(oneri.length===0)return null;
+                  return(
+                    <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",
+                      border:"1px solid #ede9e3",borderRadius:"0 0 8px 8px",zIndex:50,
+                      boxShadow:"0 4px 12px rgba(0,0,0,0.1)"}}>
+                      {oneri.map((o,i)=>(
+                        <div key={i} onClick={()=>setForm({...form,desc:o})}
+                          style={{padding:"9px 13px",fontSize:13,color:"#555",cursor:"pointer",
+                            borderBottom:i<oneri.length-1?"1px solid #f5f3ef":"none"}}>
+                          {o}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
               <div style={{display:"flex",gap:10}}>
                 <input value={form.amount} type="number"
                   onChange={e=>setForm({...form,amount:e.target.value})}
@@ -560,9 +641,14 @@ function App() {
                   <div style={{color:entry.type==="gelir"?"#1e8449":"#c0392b",fontWeight:700,fontSize:15}}>
                     {entry.type==="gelir"?"+":"-"}{fmt(entry.amount)}
                   </div>
-                  {!locked&&<button onClick={()=>delEntry(pIdx,entry.id)} style={{
-                    background:"none",border:"none",color:"#ccc",
-                    cursor:"pointer",fontSize:20,padding:0,lineHeight:1}}>×</button>}
+                  {!locked&&(<>
+                    <button onClick={()=>editEntry(pIdx,entry)} style={{
+                      background:"none",border:"1px solid #ddd",borderRadius:6,color:"#aaa",
+                      cursor:"pointer",fontSize:11,padding:"3px 7px",lineHeight:1}}>✏️</button>
+                    <button onClick={()=>delEntry(pIdx,entry.id)} style={{
+                      background:"none",border:"none",color:"#ccc",
+                      cursor:"pointer",fontSize:20,padding:0,lineHeight:1}}>×</button>
+                  </>)}
                 </div>
               </div>
             ))}
@@ -577,10 +663,10 @@ function App() {
               <div style={{fontSize:11,color:ac,letterSpacing:2,marginBottom:16,fontWeight:600}}>
                 {names[pIdx]?.toUpperCase()} — {aktifDonem?.name?.toUpperCase()}
               </div>
-              {[["Topladığım Gelir",fmt(r.inc),"#1e8449"],
-                ["Yaptığım Gider",fmt(r.exp),"#c0392b"],
+              {[["Topladığım Gelir",fmtPDF(r.inc),"#1e8449"],
+                ["Yaptığım Gider",fmtPDF(r.exp),"#c0392b"],
                 ["Kişi Başı Net Pay",fmt(r.perPerson),"#d4ac0d"],
-                ["Toplam Alacağım",fmt(r.toReceive),"#1a5276"]
+                ["Toplam Alacağım",fmtPDF(r.toReceive),"#1a5276"]
               ].map(([lbl,val,col],i)=>(
                 <div key={i} style={{display:"flex",justifyContent:"space-between",
                   alignItems:"center",padding:"11px 0",
@@ -594,8 +680,8 @@ function App() {
               background:r.balance>0.01?"#f0faf3":r.balance<-0.01?"#fdf2f2":"#f9f8f6",
               border:`1.5px solid ${r.balance>0.01?"#a9dfbf":r.balance<-0.01?"#f5c6c2":"#ede9e3"}`,
               color:r.balance>0.01?"#1e8449":r.balance<-0.01?"#c0392b":"#888"}}>
-              {r.balance>0.01?`💰 Kasadan ${fmt(r.balance)} alacaksın`
-               :r.balance<-0.01?`💸 Kasaya ${fmt(Math.abs(r.balance))} ödeyeceksin`
+              {r.balance>0.01?`💰 Kasadan ${fmtPDF(r.balance)} alacaksın`
+               :r.balance<-0.01?`💸 Kasaya ${fmtPDF(Math.abs(r.balance))} ödeyeceksin`
                :"✅ Hesap tamam"}
             </div>
           </div>
@@ -701,14 +787,14 @@ function App() {
                     </div>
                     <div style={{fontSize:17,fontWeight:700,
                       color:r.balance>0.01?"#1e8449":r.balance<-0.01?"#c0392b":"#888"}}>
-                      {r.balance>0.01?"+":""}{fmt(r.balance)}
+                      {r.balance>0.01?"+":""}{fmtPDF(r.balance)}
                     </div>
                   </div>
                 </div>
                 <div style={{display:"flex",gap:8,marginBottom:10}}>
-                  {[["Topladığı",fmt(r.inc),"#1e8449"],
-                    ["Harcadığı",fmt(r.exp),"#c0392b"],
-                    ["Alacağı",fmt(r.toReceive),"#d4ac0d"]].map(([lbl,val,col])=>(
+                  {[["Topladığı",fmtPDF(r.inc),"#1e8449"],
+                    ["Harcadığı",fmtPDF(r.exp),"#c0392b"],
+                    ["Alacağı",fmtPDF(r.toReceive),"#d4ac0d"]].map(([lbl,val,col])=>(
                     <div key={lbl} style={{flex:1,background:"#f9f8f6",borderRadius:8,
                       padding:"8px 10px",border:"1px solid #ede9e3"}}>
                       <div style={{fontSize:10,color:"#aaa",marginBottom:3}}>{lbl}</div>
@@ -720,13 +806,52 @@ function App() {
                   background:r.balance>0.01?"#f0faf3":r.balance<-0.01?"#fdf2f2":"#f9f8f6",
                   color:r.balance>0.01?"#1e8449":r.balance<-0.01?"#c0392b":"#888",
                   border:`1px solid ${r.balance>0.01?"#a9dfbf":r.balance<-0.01?"#f5c6c2":"#ede9e3"}`}}>
-                  {r.balance>0.01?`Kasadan ${fmt(r.balance)} alacak`
-                   :r.balance<-0.01?`Kasaya ${fmt(Math.abs(r.balance))} ödeyecek`
+                  {r.balance>0.01?`Kasadan ${fmtPDF(r.balance)} alacak`
+                   :r.balance<-0.01?`Kasaya ${fmtPDF(Math.abs(r.balance))} ödeyecek`
                    :"Hesap tamam ✓"}
                 </div>
               </div>
             );
           })}
+
+          {/* Denkleştirme */}
+          {(()=>{
+            const odemeler=calcDenklesme(summary.results,names);
+            if(odemeler.length===0)return null;
+            return(
+              <div style={{background:"#fff",borderRadius:14,padding:"16px 18px",marginBottom:16,
+                border:"1px solid #b8d4ed",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+                <div style={{fontSize:11,color:"#1a5276",letterSpacing:2,fontWeight:600,marginBottom:14}}>
+                  💸 DENKLEŞTİRME
+                </div>
+                {odemeler.map((o,idx)=>(
+                  <div key={idx} style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                    padding:"10px 14px",borderRadius:10,marginBottom:8,
+                    background:"#f0f5fb",border:"1px solid #b8d4ed"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:30,height:30,borderRadius:"50%",background:LIGHT[o.from],
+                        border:`2px solid ${BORDER[o.from]}`,display:"flex",alignItems:"center",
+                        justifyContent:"center",fontSize:12,color:ACCENT[o.from],fontWeight:700}}>
+                        {names[o.from][0]}
+                      </div>
+                      <span style={{fontSize:13,color:"#888"}}>→</span>
+                      <div style={{width:30,height:30,borderRadius:"50%",background:LIGHT[o.to],
+                        border:`2px solid ${BORDER[o.to]}`,display:"flex",alignItems:"center",
+                        justifyContent:"center",fontSize:12,color:ACCENT[o.to],fontWeight:700}}>
+                        {names[o.to][0]}
+                      </div>
+                      <div style={{fontSize:13,color:"#1a1a1a"}}>
+                        <span style={{fontWeight:600}}>{names[o.from]}</span>
+                        <span style={{color:"#888"}}> → </span>
+                        <span style={{fontWeight:600}}>{names[o.to]}</span>
+                      </div>
+                    </div>
+                    <div style={{fontSize:15,fontWeight:700,color:"#1a5276"}}>{fmt(o.amount)}</div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* PDF butonu */}
           <button onClick={exportPDFAktif} style={{
@@ -775,9 +900,9 @@ function App() {
                         </div>
                       </div>
                       <div style={{display:"flex",gap:12}}>
-                        <span style={{fontSize:12,color:"#1e8449",fontWeight:600}}>{fmt(s.totalIncome)}</span>
-                        <span style={{fontSize:12,color:"#c0392b"}}>−{fmt(s.totalExpense)}</span>
-                        <span style={{fontSize:12,color:"#1a5276"}}>Net: {fmt(s.netShare)}</span>
+                        <span style={{fontSize:12,color:"#1e8449",fontWeight:600}}>{fmtPDF(s.totalIncome)}</span>
+                        <span style={{fontSize:12,color:"#c0392b"}}>−{fmtPDF(s.totalExpense)}</span>
+                        <span style={{fontSize:12,color:"#1a5276"}}>Net: {fmtPDF(s.netShare)}</span>
                       </div>
                     </div>
                   );
@@ -955,22 +1080,22 @@ function App() {
                   </div>
                   <div style={{fontSize:18,fontWeight:700,
                     color:r.balance>0.01?"#1e8449":r.balance<-0.01?"#c0392b":"#888"}}>
-                    {r.balance>0.01?"+":""}{fmt(r.balance)}
+                    {r.balance>0.01?"+":""}{fmtPDF(r.balance)}
                   </div>
                 </div>
               </div>
               <div style={{display:"flex",gap:10,marginTop:14}}>
                 <div style={{flex:1,background:"#f9f8f6",borderRadius:8,padding:"8px 10px",border:"1px solid #ede9e3"}}>
                   <div style={{fontSize:10,color:"#aaa",marginBottom:2}}>Gelir</div>
-                  <div style={{color:"#1e8449",fontWeight:600,fontSize:12}}>{fmt(r.inc)}</div>
+                  <div style={{color:"#1e8449",fontWeight:600,fontSize:12}}>{fmtPDF(r.inc)}</div>
                 </div>
                 <div style={{flex:1,background:"#f9f8f6",borderRadius:8,padding:"8px 10px",border:"1px solid #ede9e3"}}>
                   <div style={{fontSize:10,color:"#aaa",marginBottom:2}}>Gider</div>
-                  <div style={{color:"#c0392b",fontWeight:600,fontSize:12}}>{fmt(r.exp)}</div>
+                  <div style={{color:"#c0392b",fontWeight:600,fontSize:12}}>{fmtPDF(r.exp)}</div>
                 </div>
                 <div style={{flex:1,background:"#f9f8f6",borderRadius:8,padding:"8px 10px",border:"1px solid #ede9e3"}}>
                   <div style={{fontSize:10,color:"#aaa",marginBottom:2}}>Alacak</div>
-                  <div style={{color:"#d4ac0d",fontWeight:600,fontSize:12}}>{fmt(r.toReceive)}</div>
+                  <div style={{color:"#d4ac0d",fontWeight:600,fontSize:12}}>{fmtPDF(r.toReceive)}</div>
                 </div>
               </div>
               <div style={{position:"absolute",right:16,top:20,color:"#ddd",fontSize:18}}>›</div>
@@ -978,6 +1103,49 @@ function App() {
           );
         })}
       </div>
+
+      {/* KAYIT DÜZENLEME MODAL */}
+      {editingEntry&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
+          display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
+          <div style={{background:"#fff",borderRadius:20,padding:28,
+            width:"90%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+            <div className="playfair" style={{fontSize:17,fontWeight:700,marginBottom:6}}>Kaydı Düzenle</div>
+            <div style={{fontSize:12,color:"#aaa",marginBottom:20}}>
+              {names[editingEntry.pIdx]} · {editingEntry.entry.date}
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              {["gelir","gider"].map(t=>(
+                <div key={t} style={{flex:1,padding:"8px",borderRadius:8,textAlign:"center",
+                  background:editingEntry.entry.type===t?(t==="gelir"?"#f0faf3":"#fdf2f2"):"#f9f8f6",
+                  border:editingEntry.entry.type===t?(t==="gelir"?"2px solid #1e8449":"2px solid #c0392b"):"2px solid #ede9e3",
+                  color:editingEntry.entry.type===t?(t==="gelir"?"#1e8449":"#c0392b"):"#aaa",fontSize:13}}>
+                  {t==="gelir"?"↑ Gelir":"↓ Gider"}
+                </div>
+              ))}
+            </div>
+            <input value={editForm.desc}
+              onChange={e=>setEditForm({...editForm,desc:e.target.value})}
+              placeholder="Açıklama"
+              style={{width:"100%",background:"#f9f8f6",border:"1px solid #ede9e3",
+                borderRadius:8,padding:"11px 13px",color:"#1a1a1a",fontSize:14,marginBottom:10}}/>
+            <input value={editForm.amount} type="number"
+              onChange={e=>setEditForm({...editForm,amount:e.target.value})}
+              onKeyDown={e=>{if(e.key==="Enter")saveEditEntry();}}
+              placeholder="Tutar (₺)"
+              style={{width:"100%",background:"#f9f8f6",border:"1px solid #ede9e3",
+                borderRadius:8,padding:"11px 13px",color:"#1a1a1a",fontSize:14,marginBottom:16}}/>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={saveEditEntry}
+                style={{flex:1,background:"#1a1a1a",border:"none",borderRadius:10,
+                  padding:13,color:"#fff",cursor:"pointer",fontSize:14,fontWeight:600}}>Kaydet</button>
+              <button onClick={()=>setEditingEntry(null)}
+                style={{flex:1,background:"#f5f3ef",border:"none",borderRadius:10,
+                  padding:13,color:"#555",cursor:"pointer",fontSize:14}}>İptal</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* YENİ DÖNEM MODAL */}
       {showNewDonem&&(
