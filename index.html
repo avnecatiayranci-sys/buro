@@ -10,7 +10,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-  <!-- jsPDF for PDF export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -26,10 +25,8 @@
     };
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
-    window.__fbDb = db; window.__fbRef = ref;
-    window.__fbSet = set; window.__fbOn = onValue;
-    window.__fbReady = true;
-    window.dispatchEvent(new Event("fb-ready"));
+    window.__fbDb=db; window.__fbRef=ref; window.__fbSet=set; window.__fbOn=onValue;
+    window.__fbReady=true; window.dispatchEvent(new Event("fb-ready"));
   </script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
@@ -45,12 +42,12 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect } = React;
 
 const DEFAULT_NAMES = ["Yunus", "Batuhan", "Necati"];
-const ACCENT = ["#c0392b", "#1a5276", "#1e8449"];
-const LIGHT  = ["#fdf2f2", "#f0f5fb", "#f0faf3"];
-const BORDER = ["#f5c6c2", "#b8d4ed", "#a9dfbf"];
+const ACCENT = ["#c0392b","#1a5276","#1e8449"];
+const LIGHT  = ["#fdf2f2","#f0f5fb","#f0faf3"];
+const BORDER = ["#f5c6c2","#b8d4ed","#a9dfbf"];
 const MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran",
                 "Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
 
@@ -60,28 +57,21 @@ const defaultMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2
 function fmt(n) {
   return n.toLocaleString("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2})+" ₺";
 }
-function fmtShort(n) {
-  if (n >= 1000000) return (n/1000000).toFixed(1)+"M";
-  if (n >= 1000) return (n/1000).toFixed(0)+"K";
-  return n.toFixed(0);
-}
 function monthLabel(ym) {
-  const [y,m] = ym.split("-");
+  const [y,m]=ym.split("-");
   return `${MONTHS[parseInt(m)-1]} ${y}`;
 }
-function fbSave(path, value) {
-  if (!window.__fbReady) return;
-  window.__fbSet(window.__fbRef(window.__fbDb, path), value);
+function fbSave(path,value) {
+  if(!window.__fbReady) return;
+  window.__fbSet(window.__fbRef(window.__fbDb,path),value);
 }
-function fbListen(path, cb) {
-  if (!window.__fbReady) return ()=>{};
-  return window.__fbOn(window.__fbRef(window.__fbDb, path), snap => cb(snap.val()));
+function fbListen(path,cb) {
+  if(!window.__fbReady) return ()=>{};
+  return window.__fbOn(window.__fbRef(window.__fbDb,path),snap=>cb(snap.val()));
 }
 
-// ── Mini bar chart component ──
-function BarChart({data, names}) {
-  const maxVal = Math.max(...data.map(d => Math.max(d.inc, d.exp)), 1);
-  const barColors = {inc:"#1e8449", exp:"#c0392b"};
+function BarChart({stats,names}) {
+  const maxVal=Math.max(...stats.map(d=>Math.max(d.inc,d.exp)),1);
   return (
     <div style={{background:"#fff",borderRadius:14,padding:"18px 16px",
       boxShadow:"0 2px 8px rgba(0,0,0,0.04)",border:"1px solid #ede9e3",marginBottom:16}}>
@@ -89,16 +79,14 @@ function BarChart({data, names}) {
         GELİR / GİDER KARŞILAŞTIRMASI
       </div>
       <div style={{display:"flex",gap:6,alignItems:"flex-end",height:100}}>
-        {data.map((d,i)=>{
-          const incH = Math.round((d.inc/maxVal)*90);
-          const expH = Math.round((d.exp/maxVal)*90);
+        {stats.map((d,i)=>{
+          const incH=Math.round((d.inc/maxVal)*90);
+          const expH=Math.round((d.exp/maxVal)*90);
           return (
             <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
               <div style={{display:"flex",gap:3,alignItems:"flex-end",height:90}}>
-                <div style={{width:14,background:"#1e8449",borderRadius:"3px 3px 0 0",
-                  height:incH||2,transition:"height 0.5s"}} title={fmt(d.inc)}/>
-                <div style={{width:14,background:"#c0392b",borderRadius:"3px 3px 0 0",
-                  height:expH||2,transition:"height 0.5s"}} title={fmt(d.exp)}/>
+                <div style={{width:14,background:"#1e8449",borderRadius:"3px 3px 0 0",height:incH||2}}/>
+                <div style={{width:14,background:"#c0392b",borderRadius:"3px 3px 0 0",height:expH||2}}/>
               </div>
               <div style={{fontSize:10,color:"#888",textAlign:"center",fontWeight:500}}>
                 {names[i].slice(0,4)}
@@ -121,21 +109,17 @@ function BarChart({data, names}) {
   );
 }
 
-// ── Monthly trend chart ──
-function TrendChart({months, summaries}) {
-  if (months.length < 2) return null;
-  const vals = summaries.map(s => s.netShare);
-  const maxV = Math.max(...vals, 1);
-  const minV = Math.min(...vals, 0);
-  const range = maxV - minV || 1;
-  const W = 300, H = 80;
-  const pts = vals.map((v,i) => {
-    const x = (i / (vals.length-1)) * (W-20) + 10;
-    const y = H - ((v - minV) / range) * (H-16) - 8;
+function TrendChart({months,summaries}) {
+  if(months.length<2) return null;
+  const vals=summaries.map(s=>s.netShare);
+  const maxV=Math.max(...vals,1),minV=Math.min(...vals,0);
+  const range=maxV-minV||1;
+  const W=300,H=80;
+  const pts=vals.map((v,i)=>{
+    const x=(i/(vals.length-1))*(W-20)+10;
+    const y=H-((v-minV)/range)*(H-16)-8;
     return `${x},${y}`;
   });
-  const polyline = pts.join(" ");
-  const area = `10,${H} ${pts.join(" ")} ${(W-10)},${H}`;
   return (
     <div style={{background:"#fff",borderRadius:14,padding:"18px 16px",
       boxShadow:"0 2px 8px rgba(0,0,0,0.04)",border:"1px solid #ede9e3",marginBottom:16}}>
@@ -144,20 +128,17 @@ function TrendChart({months, summaries}) {
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:H}}>
         <defs>
-          <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="tg" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#1a5276" stopOpacity="0.15"/>
             <stop offset="100%" stopColor="#1a5276" stopOpacity="0"/>
           </linearGradient>
         </defs>
-        <polygon points={area} fill="url(#trendGrad)"/>
-        <polyline points={polyline} fill="none" stroke="#1a5276" strokeWidth="2" strokeLinejoin="round"/>
-        {pts.map((pt,i) => {
-          const [x,y] = pt.split(",");
-          return <circle key={i} cx={x} cy={y} r="3" fill="#1a5276"/>;
-        })}
+        <polygon points={`10,${H} ${pts.join(" ")} ${W-10},${H}`} fill="url(#tg)"/>
+        <polyline points={pts.join(" ")} fill="none" stroke="#1a5276" strokeWidth="2" strokeLinejoin="round"/>
+        {pts.map((pt,i)=>{const [x,y]=pt.split(","); return <circle key={i} cx={x} cy={y} r="3" fill="#1a5276"/>;})}
       </svg>
       <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-        {months.map((m,i) => (
+        {months.map((m,i)=>(
           <div key={i} style={{fontSize:9,color:"#bbb",textAlign:"center"}}>
             {MONTHS[parseInt(m.split("-")[1])-1].slice(0,3)}
           </div>
@@ -171,7 +152,8 @@ function App() {
   const [data,         setData]         = useState({});
   const [names,        setNames]        = useState(DEFAULT_NAMES);
   const [month,        setMonth]        = useState(defaultMonth);
-  const [tab,          setTab]          = useState("ozet");
+  // screen: "home" | "ozet" | "ortak-0" | "ortak-1" | "ortak-2"
+  const [screen,       setScreen]       = useState("home");
   const [subTab,       setSubTab]       = useState("kayitlar");
   const [form,         setForm]         = useState({type:"gelir",desc:"",amount:""});
   const [editingNames, setEditingNames] = useState(false);
@@ -183,57 +165,56 @@ function App() {
   const [toast,        setToast]        = useState(null);
   const [showArchive,  setShowArchive]  = useState(false);
 
-  useEffect(() => {
-    function start() {
+  useEffect(()=>{
+    function start(){
       setFbReady(true);
-      const u1 = fbListen("buro/data",  v => setData(v || {}));
-      const u2 = fbListen("buro/names", v => { if(v){setNames(v);setTempNames(v);} });
-      return () => { u1&&u1(); u2&&u2(); };
+      const u1=fbListen("buro/data",v=>setData(v||{}));
+      const u2=fbListen("buro/names",v=>{if(v){setNames(v);setTempNames(v);}});
+      return ()=>{u1&&u1();u2&&u2();};
     }
-    if (window.__fbReady) return start();
-    const h = () => start();
-    window.addEventListener("fb-ready", h);
-    return () => window.removeEventListener("fb-ready", h);
-  }, []);
+    if(window.__fbReady) return start();
+    const h=()=>start();
+    window.addEventListener("fb-ready",h);
+    return ()=>window.removeEventListener("fb-ready",h);
+  },[]);
 
-  function showToast(msg, color="#1e8449") {
+  function showToast(msg,color="#1e8449"){
     setToast({msg,color});
-    setTimeout(()=>setToast(null), 2500);
+    setTimeout(()=>setToast(null),2500);
   }
-  function saveData(nd) {
-    setSyncing(true); fbSave("buro/data", nd);
-    setTimeout(()=>setSyncing(false), 800);
+  function saveData(nd){
+    setSyncing(true); fbSave("buro/data",nd);
+    setTimeout(()=>setSyncing(false),800);
   }
-  function getEntries(i, m) { return data?.[m]?.[i] || []; }
-
-  function addEntry(pIdx) {
-    const amount = parseFloat(form.amount);
-    if (!form.desc.trim() || isNaN(amount) || amount<=0) return;
-    const entry = {id:Date.now(),type:form.type,desc:form.desc.trim(),
-                   amount,date:new Date().toLocaleDateString("tr-TR")};
-    const nd = JSON.parse(JSON.stringify(data));
-    if (!nd[month]) nd[month]={};
-    if (!nd[month][pIdx]) nd[month][pIdx]=[];
+  function getEntries(i,m){return data?.[m]?.[i]||[];}
+  function addEntry(pIdx){
+    const amount=parseFloat(form.amount);
+    if(!form.desc.trim()||isNaN(amount)||amount<=0) return;
+    const entry={id:Date.now(),type:form.type,desc:form.desc.trim(),
+                 amount,date:new Date().toLocaleDateString("tr-TR")};
+    const nd=JSON.parse(JSON.stringify(data));
+    if(!nd[month]) nd[month]={};
+    if(!nd[month][pIdx]) nd[month][pIdx]=[];
     nd[month][pIdx].push(entry);
     setData(nd); saveData(nd);
     setForm({type:form.type,desc:"",amount:""});
     showToast(form.type==="gelir"?"✓ Gelir eklendi":"✓ Gider eklendi",
               form.type==="gelir"?"#1e8449":"#c0392b");
   }
-  function delEntry(pIdx, id) {
-    const nd = JSON.parse(JSON.stringify(data));
-    if (nd[month]?.[pIdx]) nd[month][pIdx]=nd[month][pIdx].filter(e=>e.id!==id);
+  function delEntry(pIdx,id){
+    const nd=JSON.parse(JSON.stringify(data));
+    if(nd[month]?.[pIdx]) nd[month][pIdx]=nd[month][pIdx].filter(e=>e.id!==id);
     setData(nd); saveData(nd);
   }
-  function doReset() {
-    if (resetConfirm!=="SIFIRLA") return;
-    const nd = JSON.parse(JSON.stringify(data));
+  function doReset(){
+    if(resetConfirm!=="SIFIRLA") return;
+    const nd=JSON.parse(JSON.stringify(data));
     delete nd[month];
     setData(nd); saveData(nd);
     setResetModal(false); setResetConfirm("");
     showToast("🗑 "+monthLabel(month)+" verileri silindi","#c0392b");
   }
-  function calcSummary(m) {
+  function calcSummary(m){
     let totalIncome=0,totalExpense=0;
     const stats=[0,1,2].map(i=>{
       const inc=getEntries(i,m).filter(e=>e.type==="gelir").reduce((s,e)=>s+e.amount,0);
@@ -251,101 +232,59 @@ function App() {
     return {totalIncome,totalExpense,netShare,perPerson,results,stats};
   }
 
-  // Tüm mevcut ayları hesapla
-  const allMonths = Object.keys(data).sort().reverse();
+  const allMonths=Object.keys(data).sort().reverse();
+  const trendMonths=allMonths.slice(0,6).reverse();
+  const trendSummaries=trendMonths.map(m=>calcSummary(m));
+  const summary=calcSummary(month);
+  const pIdx=screen.startsWith("ortak-")?parseInt(screen.split("-")[1]):null;
 
-  // Son 6 ayın trend verisi
-  const trendMonths = allMonths.slice(0,6).reverse();
-  const trendSummaries = trendMonths.map(m => calcSummary(m));
-
-  // PDF oluştur
-  function exportPDF() {
-    const s = calcSummary(month);
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-    const lbl = monthLabel(month);
-
-    // Header
-    doc.setFillColor(26,26,26);
-    doc.rect(0,0,210,35,"F");
-    doc.setTextColor(255,255,255);
-    doc.setFontSize(18);
-    doc.setFont("helvetica","bold");
-    doc.text("MADALYON HUKUK BUROSU", 105, 15, {align:"center"});
-    doc.setFontSize(11);
-    doc.setFont("helvetica","normal");
-    doc.text(lbl + " - Ay Sonu Hesap Raporu", 105, 25, {align:"center"});
-
-    let y = 45;
-
-    // Toplam özet kutusu
-    doc.setFillColor(245,243,239);
-    doc.roundedRect(14, y, 182, 32, 3, 3, "F");
-    doc.setTextColor(26,26,26);
-    doc.setFontSize(9); doc.setFont("helvetica","normal");
-    doc.setTextColor(100,100,100);
-    doc.text("TOPLAM GELIR", 30, y+8);
-    doc.text("TOPLAM GIDER", 85, y+8);
-    doc.text("NET DAGITILACAK", 140, y+8);
+  function exportPDF(){
+    const s=calcSummary(month);
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    doc.setFillColor(26,26,26); doc.rect(0,0,210,35,"F");
+    doc.setTextColor(255,255,255); doc.setFontSize(18); doc.setFont("helvetica","bold");
+    doc.text("MADALYON HUKUK BUROSU",105,15,{align:"center"});
+    doc.setFontSize(11); doc.setFont("helvetica","normal");
+    doc.text(monthLabel(month)+" - Ay Sonu Hesap Raporu",105,25,{align:"center"});
+    let y=45;
+    doc.setFillColor(245,243,239); doc.roundedRect(14,y,182,32,3,3,"F");
+    doc.setFontSize(9); doc.setTextColor(100,100,100);
+    doc.text("TOPLAM GELIR",30,y+8); doc.text("TOPLAM GIDER",85,y+8); doc.text("NET DAGITILACAK",140,y+8);
     doc.setFontSize(12); doc.setFont("helvetica","bold");
-    doc.setTextColor(30,132,73);
-    doc.text(fmt(s.totalIncome), 30, y+20);
-    doc.setTextColor(192,57,43);
-    doc.text(fmt(s.totalExpense), 85, y+20);
-    doc.setTextColor(26,82,118);
-    doc.text(fmt(s.netShare), 140, y+20);
-    y += 42;
-
-    // Kişi başı
-    doc.setFontSize(10); doc.setFont("helvetica","normal");
-    doc.setTextColor(100,100,100);
-    doc.text("Kisi basi net pay: " + fmt(s.perPerson), 14, y);
-    y += 12;
-
-    // Her ortak
-    [0,1,2].map(i => {
-      const r = s.results[i];
-      doc.setFillColor(i===0?253:i===1?240:240, i===0?242:i===1?245:250, i===0?242:i===1?251:243);
-      doc.roundedRect(14, y, 182, 48, 3, 3, "F");
+    doc.setTextColor(30,132,73); doc.text(fmt(s.totalIncome),30,y+20);
+    doc.setTextColor(192,57,43); doc.text(fmt(s.totalExpense),85,y+20);
+    doc.setTextColor(26,82,118); doc.text(fmt(s.netShare),140,y+20);
+    y+=42;
+    doc.setFontSize(10); doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
+    doc.text("Kisi basi net pay: "+fmt(s.perPerson),14,y); y+=12;
+    [0,1,2].forEach(i=>{
+      const r=s.results[i];
+      const rgb=i===0?[253,242,242]:i===1?[240,245,251]:[240,250,243];
+      doc.setFillColor(...rgb); doc.roundedRect(14,y,182,48,3,3,"F");
       doc.setFontSize(12); doc.setFont("helvetica","bold");
-      doc.setTextColor(ACCENT[i].replace("#","") === "c0392b" ? 192 : ACCENT[i].replace("#","") === "1a5276" ? 26 : 30,
-                       ACCENT[i].replace("#","") === "c0392b" ? 57  : ACCENT[i].replace("#","") === "1a5276" ? 82 : 132,
-                       ACCENT[i].replace("#","") === "c0392b" ? 43  : ACCENT[i].replace("#","") === "1a5276" ? 118 : 73);
-      doc.text(names[i], 22, y+12);
-      doc.setFontSize(9); doc.setFont("helvetica","normal");
-      doc.setTextColor(80,80,80);
-      doc.text("Toplanan Gelir:", 22, y+22);
-      doc.text("Yapilan Gider:", 22, y+30);
-      doc.text("Toplam Alacagi:", 22, y+38);
+      const ac=i===0?[192,57,43]:i===1?[26,82,118]:[30,132,73];
+      doc.setTextColor(...ac); doc.text(names[i],22,y+12);
+      doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(80,80,80);
+      doc.text("Toplanan Gelir:",22,y+22); doc.text("Yapilan Gider:",22,y+30); doc.text("Toplam Alacagi:",22,y+38);
       doc.setFont("helvetica","bold");
-      doc.setTextColor(30,132,73);  doc.text(fmt(r.inc),       90, y+22);
-      doc.setTextColor(192,57,43);  doc.text(fmt(r.exp),       90, y+30);
-      doc.setTextColor(26,82,118);  doc.text(fmt(r.toReceive), 90, y+38);
-      // Sonuç
-      const balTxt = r.balance>0.01 ? "Kasadan " + fmt(r.balance) + " alacak"
-                   : r.balance<-0.01 ? "Kasaya " + fmt(Math.abs(r.balance)) + " odeyecek"
-                   : "Hesap tamam";
-      doc.setFontSize(10); doc.setFont("helvetica","bold");
-      doc.setTextColor(r.balance>0.01?30:r.balance<-0.01?192:100,
-                       r.balance>0.01?132:r.balance<-0.01?57:100,
-                       r.balance>0.01?73:r.balance<-0.01?43:100);
-      doc.text(balTxt, 150, y+30, {align:"right"});
-      y += 56;
+      doc.setTextColor(30,132,73); doc.text(fmt(r.inc),90,y+22);
+      doc.setTextColor(192,57,43); doc.text(fmt(r.exp),90,y+30);
+      doc.setTextColor(26,82,118); doc.text(fmt(r.toReceive),90,y+38);
+      const balTxt=r.balance>0.01?"Kasadan "+fmt(r.balance)+" alacak"
+                  :r.balance<-0.01?"Kasaya "+fmt(Math.abs(r.balance))+" odeyecek":"Hesap tamam";
+      const bc=r.balance>0.01?[30,132,73]:r.balance<-0.01?[192,57,43]:[100,100,100];
+      doc.setTextColor(...bc); doc.text(balTxt,150,y+30,{align:"right"});
+      y+=56;
     });
-
-    // Footer
-    doc.setFontSize(8); doc.setFont("helvetica","normal");
-    doc.setTextColor(180,180,180);
-    doc.text("Olusturulma: " + new Date().toLocaleDateString("tr-TR") + " - Madalyon Hukuk Burosu", 105, 285, {align:"center"});
-
-    doc.save("Madalyon_" + month + "_Rapor.pdf");
+    doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(180,180,180);
+    doc.text("Olusturulma: "+new Date().toLocaleDateString("tr-TR")+" - Madalyon Hukuk Burosu",105,285,{align:"center"});
+    doc.save("Madalyon_"+month+"_Rapor.pdf");
     showToast("📄 PDF indirildi");
   }
 
-  const summary = calcSummary(month);
-  const pIdx = tab==="ozet" ? null : parseInt(tab);
-
-  if (!fbReady) return (
+  // ── LOADING ──
+  if(!fbReady) return (
     <div style={{minHeight:"100vh",background:"#f5f3ef",display:"flex",
       alignItems:"center",justifyContent:"center"}}>
       <div style={{textAlign:"center"}}>
@@ -356,89 +295,232 @@ function App() {
     </div>
   );
 
-  return (
-    <div style={{minHeight:"100vh",background:"#f5f3ef",paddingBottom:80}}>
-
-      {/* TOAST */}
-      {toast && (
-        <div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",
+  // ── ORTAK DETAY EKRANI ──
+  if(screen.startsWith("ortak-")){
+    const ac=ACCENT[pIdx],lt=LIGHT[pIdx],bd=BORDER[pIdx];
+    const myEntries=getEntries(pIdx,month);
+    const myInc=myEntries.filter(e=>e.type==="gelir").reduce((s,e)=>s+e.amount,0);
+    const myExp=myEntries.filter(e=>e.type==="gider").reduce((s,e)=>s+e.amount,0);
+    const r=summary.results[pIdx];
+    return (
+      <div style={{minHeight:"100vh",background:"#f5f3ef",paddingBottom:80}}>
+        {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",
           background:toast.color,color:"#fff",padding:"10px 20px",borderRadius:20,
           fontSize:13,fontWeight:500,zIndex:999,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
-          whiteSpace:"nowrap"}}>
-          {toast.msg}
-        </div>
-      )}
+          whiteSpace:"nowrap"}}>{toast.msg}</div>}
 
-      {/* HEADER */}
-      <div style={{background:"#fff",borderBottom:"1px solid #e8e4de",
-        padding:"16px 16px 0",position:"sticky",top:0,zIndex:20,
-        boxShadow:"0 1px 8px rgba(0,0,0,0.06)"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:22}}>⚖️</span>
-            <div>
-              <div className="playfair" style={{fontSize:15,fontWeight:700,color:"#1a1a1a",lineHeight:1.2}}>MADALYON</div>
-              <div style={{fontSize:10,color:"#888",letterSpacing:1.5,fontWeight:500}}>HUKUK BÜROSU</div>
+        {/* Header */}
+        <div style={{background:"#fff",borderBottom:"1px solid #e8e4de",padding:"14px 16px 0",
+          position:"sticky",top:0,zIndex:20,boxShadow:"0 1px 8px rgba(0,0,0,0.06)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <button onClick={()=>setScreen("home")}
+              style={{background:"none",border:"none",color:ac,cursor:"pointer",
+                fontSize:14,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+              ← Ana Ekran
+            </button>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:32,height:32,borderRadius:"50%",background:lt,
+                border:`2px solid ${bd}`,display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:14,color:ac,fontWeight:700}}>{names[pIdx][0]}</div>
+              <div className="playfair" style={{fontSize:15,fontWeight:700,color:"#1a1a1a"}}>
+                {names[pIdx]}
+              </div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:4,
+              background:"#f5f3ef",borderRadius:20,padding:"3px 8px"}}>
+              <button onClick={()=>{
+                const [y,m2]=month.split("-").map(Number);
+                const d=new Date(y,m2-2);
+                setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+              }} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:18,padding:"0 2px"}}>‹</button>
+              <span style={{fontSize:11,color:"#333",fontWeight:500,minWidth:80,textAlign:"center"}}>{monthLabel(month)}</span>
+              <button onClick={()=>{
+                const [y,m2]=month.split("-").map(Number);
+                const d=new Date(y,m2);
+                setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+              }} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:18,padding:"0 2px"}}>›</button>
             </div>
           </div>
+          <div style={{display:"flex",borderRadius:10,overflow:"hidden",
+            border:"1px solid #ede9e3",marginBottom:12}}>
+            {[["kayitlar","📝 Kayıtlar"],["hesap","⚖️ Hesabım"]].map(([k,lbl])=>(
+              <button key={k} onClick={()=>setSubTab(k)} style={{
+                flex:1,background:subTab===k?"#1a1a1a":"transparent",border:"none",
+                color:subTab===k?"#fff":"#888",padding:"9px 4px",cursor:"pointer",
+                fontSize:13,fontFamily:"Inter,sans-serif",fontWeight:subTab===k?600:400,
+                transition:"all 0.15s"
+              }}>{lbl}</button>
+            ))}
+          </div>
+        </div>
 
-          <div style={{display:"flex",alignItems:"center",gap:4,
-            background:"#f5f3ef",borderRadius:20,padding:"4px 8px"}}>
+        {/* Gelir/Gider mini bar */}
+        <div style={{background:"#fff",borderBottom:"1px solid #ede9e3",padding:"12px 16px"}}>
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:1,background:"#f0faf3",borderRadius:10,padding:"10px 14px",border:"1px solid #a9dfbf"}}>
+              <div style={{fontSize:10,color:"#1e8449",letterSpacing:1,marginBottom:3,fontWeight:600}}>GELİR</div>
+              <div style={{fontSize:17,fontWeight:700,color:"#1e8449"}}>{fmt(myInc)}</div>
+            </div>
+            <div style={{flex:1,background:"#fdf2f2",borderRadius:10,padding:"10px 14px",border:"1px solid #f5c6c2"}}>
+              <div style={{fontSize:10,color:"#c0392b",letterSpacing:1,marginBottom:3,fontWeight:600}}>GİDER</div>
+              <div style={{fontSize:17,fontWeight:700,color:"#c0392b"}}>{fmt(myExp)}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Kayıtlar */}
+        {subTab==="kayitlar"&&(
+          <div style={{padding:16}}>
+            <div style={{background:"#fff",border:`1px solid ${bd}`,borderRadius:14,
+              padding:16,marginBottom:20,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+              <div style={{fontSize:11,color:ac,letterSpacing:2,marginBottom:12,fontWeight:600}}>
+                YENİ KAYIT
+              </div>
+              <div style={{display:"flex",gap:8,marginBottom:10}}>
+                {["gelir","gider"].map(t=>(
+                  <button key={t} onClick={()=>setForm({...form,type:t})} style={{
+                    flex:1,padding:"10px",borderRadius:8,cursor:"pointer",
+                    border:form.type===t?(t==="gelir"?"2px solid #1e8449":"2px solid #c0392b"):"2px solid #ede9e3",
+                    background:form.type===t?(t==="gelir"?"#f0faf3":"#fdf2f2"):"#f9f8f6",
+                    color:form.type===t?(t==="gelir"?"#1e8449":"#c0392b"):"#aaa",
+                    fontFamily:"Inter,sans-serif",fontSize:14,fontWeight:500,transition:"all 0.15s"
+                  }}>{t==="gelir"?"↑ Gelir":"↓ Gider"}</button>
+                ))}
+              </div>
+              <input value={form.desc} onChange={e=>setForm({...form,desc:e.target.value})}
+                placeholder="Açıklama (örn: Dava ücreti, Kırtasiye...)"
+                style={{width:"100%",background:"#f9f8f6",border:"1px solid #ede9e3",
+                  borderRadius:8,padding:"11px 13px",color:"#1a1a1a",fontSize:14,marginBottom:10}}/>
+              <div style={{display:"flex",gap:10}}>
+                <input value={form.amount} type="number"
+                  onChange={e=>setForm({...form,amount:e.target.value})}
+                  onKeyDown={e=>{if(e.key==="Enter")addEntry(pIdx);}}
+                  placeholder="Tutar (₺)"
+                  style={{flex:1,background:"#f9f8f6",border:"1px solid #ede9e3",
+                    borderRadius:8,padding:"11px 13px",color:"#1a1a1a",fontSize:14}}/>
+                <button onClick={()=>addEntry(pIdx)} style={{
+                  background:ac,border:"none",borderRadius:8,padding:"11px 22px",
+                  color:"#fff",cursor:"pointer",fontSize:22,fontWeight:"bold",
+                  boxShadow:`0 4px 12px ${ac}44`}}>+</button>
+              </div>
+            </div>
+            <div style={{fontSize:11,color:"#aaa",letterSpacing:2,marginBottom:12,fontWeight:600}}>
+              {monthLabel(month).toUpperCase()} KAYITLARI
+            </div>
+            {myEntries.length===0&&(
+              <div style={{textAlign:"center",padding:"50px 0",color:"#ccc",fontSize:14}}>Henüz kayıt yok</div>
+            )}
+            {[...myEntries].reverse().map(entry=>(
+              <div key={entry.id} style={{
+                background:"#fff",
+                borderLeft:`3px solid ${entry.type==="gelir"?"#1e8449":"#c0392b"}`,
+                borderRadius:"0 10px 10px 0",padding:"12px 16px",marginBottom:8,
+                display:"flex",justifyContent:"space-between",alignItems:"center",
+                boxShadow:"0 1px 4px rgba(0,0,0,0.05)"}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:500,color:"#1a1a1a"}}>{entry.desc}</div>
+                  <div style={{fontSize:11,color:"#bbb",marginTop:3}}>{entry.date}</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:12}}>
+                  <div style={{color:entry.type==="gelir"?"#1e8449":"#c0392b",fontWeight:700,fontSize:15}}>
+                    {entry.type==="gelir"?"+":"-"}{fmt(entry.amount)}
+                  </div>
+                  <button onClick={()=>delEntry(pIdx,entry.id)} style={{
+                    background:"none",border:"none",color:"#ccc",
+                    cursor:"pointer",fontSize:20,padding:0,lineHeight:1}}>×</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Hesabım */}
+        {subTab==="hesap"&&(
+          <div style={{padding:16}}>
+            <div style={{background:"#fff",border:`1px solid ${bd}`,borderRadius:14,
+              padding:"20px 18px",marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+              <div style={{fontSize:11,color:ac,letterSpacing:2,marginBottom:16,fontWeight:600}}>
+                {names[pIdx].toUpperCase()} — {monthLabel(month).toUpperCase()}
+              </div>
+              {[["Topladığım Gelir",fmt(r.inc),"#1e8449"],
+                ["Yaptığım Gider",fmt(r.exp),"#c0392b"],
+                ["Kişi Başı Net Pay",fmt(r.perPerson),"#d4ac0d"],
+                ["Toplam Alacağım",fmt(r.toReceive),"#1a5276"]
+              ].map(([lbl,val,col],i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",
+                  alignItems:"center",padding:"11px 0",
+                  borderBottom:i<3?"1px solid #f5f3ef":"none"}}>
+                  <span style={{color:"#888",fontSize:14}}>{lbl}</span>
+                  <span style={{color:col,fontWeight:700,fontSize:15}}>{val}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{padding:18,borderRadius:14,fontSize:16,textAlign:"center",fontWeight:700,
+              background:r.balance>0.01?"#f0faf3":r.balance<-0.01?"#fdf2f2":"#f9f8f6",
+              border:`1.5px solid ${r.balance>0.01?"#a9dfbf":r.balance<-0.01?"#f5c6c2":"#ede9e3"}`,
+              color:r.balance>0.01?"#1e8449":r.balance<-0.01?"#c0392b":"#888"}}>
+              {r.balance>0.01?`💰 Kasadan ${fmt(r.balance)} alacaksın`
+               :r.balance<-0.01?`💸 Kasaya ${fmt(Math.abs(r.balance))} ödeyeceksin`
+               :"✅ Hesap tamam"}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── HESAP ÖZETİ EKRANI ──
+  if(screen==="ozet"){
+    return (
+      <div style={{minHeight:"100vh",background:"#f5f3ef",paddingBottom:80}}>
+        {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",
+          background:toast.color,color:"#fff",padding:"10px 20px",borderRadius:20,
+          fontSize:13,fontWeight:500,zIndex:999,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
+          whiteSpace:"nowrap"}}>{toast.msg}</div>}
+
+        {/* Header */}
+        <div style={{background:"#fff",borderBottom:"1px solid #e8e4de",padding:"14px 16px",
+          position:"sticky",top:0,zIndex:20,boxShadow:"0 1px 8px rgba(0,0,0,0.06)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <button onClick={()=>setScreen("home")}
+              style={{background:"none",border:"none",color:"#1a5276",cursor:"pointer",
+                fontSize:14,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+              ← Ana Ekran
+            </button>
+            <div className="playfair" style={{fontSize:15,fontWeight:700}}>Hesap Özeti</div>
+            <div style={{display:"flex",gap:5,alignItems:"center"}}>
+              {syncing&&<span style={{fontSize:10,color:"#aaa"}}>↑</span>}
+              <button onClick={()=>setShowArchive(true)}
+                style={{background:"none",border:"1px solid #ddd",borderRadius:8,
+                  color:"#666",padding:"5px 8px",cursor:"pointer",fontSize:12}}>📅</button>
+              <button onClick={exportPDF}
+                style={{background:"none",border:"1px solid #b8d4ed",borderRadius:8,
+                  color:"#1a5276",padding:"5px 8px",cursor:"pointer",fontSize:12}}>📄</button>
+              <button onClick={()=>{setResetModal(true);setResetConfirm("");}}
+                style={{background:"none",border:"1px solid #f5c6c2",borderRadius:8,
+                  color:"#c0392b",padding:"5px 8px",cursor:"pointer",fontSize:12}}>🗑</button>
+            </div>
+          </div>
+          {/* Ay navigasyonu */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:10}}>
             <button onClick={()=>{
               const [y,m2]=month.split("-").map(Number);
               const d=new Date(y,m2-2);
               setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
-            }} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:18,padding:"0 4px"}}>‹</button>
-            <span style={{fontSize:12,color:"#333",fontWeight:500,minWidth:88,textAlign:"center"}}>{monthLabel(month)}</span>
+            }} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:20}}>‹</button>
+            <span style={{fontSize:13,color:"#333",fontWeight:500,minWidth:100,textAlign:"center"}}>
+              {monthLabel(month)}
+            </span>
             <button onClick={()=>{
               const [y,m2]=month.split("-").map(Number);
               const d=new Date(y,m2);
               setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
-            }} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:18,padding:"0 4px"}}>›</button>
-          </div>
-
-          <div style={{display:"flex",gap:5,alignItems:"center"}}>
-            {syncing && <span style={{fontSize:10,color:"#aaa"}}>↑</span>}
-            <button onClick={()=>setShowArchive(true)} title="Arşiv"
-              style={{background:"none",border:"1px solid #ddd",borderRadius:8,
-                color:"#666",padding:"5px 8px",cursor:"pointer",fontSize:12}}>📅</button>
-            <button onClick={exportPDF} title="PDF indir"
-              style={{background:"none",border:"1px solid #b8d4ed",borderRadius:8,
-                color:"#1a5276",padding:"5px 8px",cursor:"pointer",fontSize:12}}>📄</button>
-            <button onClick={()=>{setEditingNames(true);setTempNames(names);}}
-              style={{background:"none",border:"1px solid #ddd",borderRadius:8,
-                color:"#666",padding:"5px 8px",cursor:"pointer",fontSize:12}}>✏️</button>
-            <button onClick={()=>{setResetModal(true);setResetConfirm("");}}
-              style={{background:"none",border:"1px solid #f5c6c2",borderRadius:8,
-                color:"#c0392b",padding:"5px 8px",cursor:"pointer",fontSize:12}}>🗑</button>
+            }} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:20}}>›</button>
           </div>
         </div>
 
-        <div style={{display:"flex"}}>
-          {["ozet","0","1","2"].map(t=>{
-            const lbl=t==="ozet"?"Özet":names[parseInt(t)];
-            const ac=t==="ozet"?"#1a1a1a":ACCENT[parseInt(t)];
-            const active=tab===t;
-            return (
-              <button key={t} onClick={()=>setTab(t)} style={{
-                flex:1,background:"none",border:"none",
-                borderBottom:active?`2.5px solid ${ac}`:"2.5px solid transparent",
-                color:active?ac:"#aaa",
-                padding:"8px 2px",cursor:"pointer",
-                fontSize:12,fontWeight:active?600:400,
-                fontFamily:"Inter,sans-serif",
-                whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
-                transition:"all 0.15s"
-              }}>{t==="ozet"?"📊 "+lbl:lbl}</button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ══ ÖZET ══ */}
-      {tab==="ozet" && (
         <div style={{padding:"20px 16px"}}>
-          {/* Hero kart */}
+          {/* Hero */}
           <div style={{background:"#1a1a1a",borderRadius:16,padding:"20px",
             marginBottom:20,position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",right:-20,top:-20,fontSize:80,opacity:0.05}}>⚖️</div>
@@ -460,27 +542,23 @@ function App() {
           </div>
 
           {/* Grafik */}
-          <BarChart data={summary.stats} names={names} />
+          <BarChart stats={summary.stats} names={names}/>
 
-          {/* Trend (eğer birden fazla ay varsa) */}
-          {trendMonths.length >= 2 && (
-            <TrendChart months={trendMonths} summaries={trendSummaries} />
-          )}
+          {/* Trend */}
+          {trendMonths.length>=2&&<TrendChart months={trendMonths} summaries={trendSummaries}/>}
 
           {/* Ortak kartları */}
           {[0,1,2].map(i=>{
-            const ac=ACCENT[i],lt=LIGHT[i],bd=BORDER[i];
-            const r=summary.results[i];
+            const ac=ACCENT[i],lt=LIGHT[i],bd=BORDER[i],r=summary.results[i];
             return (
               <div key={i} style={{background:"#fff",border:`1px solid ${bd}`,
                 borderRadius:14,padding:"16px 18px",marginBottom:12,
                 boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{width:36,height:36,borderRadius:"50%",
-                      background:lt,border:`2px solid ${bd}`,
-                      display:"flex",alignItems:"center",justifyContent:"center",
-                      fontSize:14,color:ac,fontWeight:700}}>
+                    <div style={{width:36,height:36,borderRadius:"50%",background:lt,
+                      border:`2px solid ${bd}`,display:"flex",alignItems:"center",
+                      justifyContent:"center",fontSize:14,color:ac,fontWeight:700}}>
                       {names[i][0]}
                     </div>
                     <div>
@@ -521,7 +599,7 @@ function App() {
             );
           })}
 
-          {/* PDF butonu - sayfa altı */}
+          {/* PDF butonu */}
           <button onClick={exportPDF} style={{
             width:"100%",background:"#1a5276",border:"none",borderRadius:12,
             padding:"14px",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:600,
@@ -529,239 +607,224 @@ function App() {
             📄 {monthLabel(month)} Raporunu PDF İndir
           </button>
         </div>
-      )}
 
-      {/* ══ ORTAK SEKMELERİ ══ */}
-      {tab!=="ozet" && pIdx!==null && (()=>{
-        const ac=ACCENT[pIdx],lt=LIGHT[pIdx],bd=BORDER[pIdx];
-        const myEntries=getEntries(pIdx,month);
-        const myInc=myEntries.filter(e=>e.type==="gelir").reduce((s,e)=>s+e.amount,0);
-        const myExp=myEntries.filter(e=>e.type==="gider").reduce((s,e)=>s+e.amount,0);
-        const r=summary.results[pIdx];
-        return (
-          <div>
-            <div style={{background:"#fff",borderBottom:"1px solid #ede9e3",padding:"12px 16px"}}>
-              <div style={{display:"flex",gap:10,marginBottom:10}}>
-                <div style={{flex:1,background:"#f0faf3",borderRadius:10,padding:"10px 14px",border:"1px solid #a9dfbf"}}>
-                  <div style={{fontSize:10,color:"#1e8449",letterSpacing:1,marginBottom:3,fontWeight:600}}>GELİR</div>
-                  <div style={{fontSize:17,fontWeight:700,color:"#1e8449"}}>{fmt(myInc)}</div>
-                </div>
-                <div style={{flex:1,background:"#fdf2f2",borderRadius:10,padding:"10px 14px",border:"1px solid #f5c6c2"}}>
-                  <div style={{fontSize:10,color:"#c0392b",letterSpacing:1,marginBottom:3,fontWeight:600}}>GİDER</div>
-                  <div style={{fontSize:17,fontWeight:700,color:"#c0392b"}}>{fmt(myExp)}</div>
-                </div>
+        {/* ARŞİV */}
+        {showArchive&&(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
+            display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}}>
+            <div style={{background:"#fff",borderRadius:"20px 20px 0 0",padding:"24px 20px",
+              width:"100%",maxWidth:480,maxHeight:"75vh",display:"flex",flexDirection:"column",
+              boxShadow:"0 -8px 40px rgba(0,0,0,0.2)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+                <div className="playfair" style={{fontSize:17,fontWeight:700}}>📅 Geçmiş Aylar</div>
+                <button onClick={()=>setShowArchive(false)}
+                  style={{background:"none",border:"none",fontSize:22,color:"#aaa",cursor:"pointer"}}>×</button>
               </div>
-              <div style={{display:"flex",borderRadius:10,overflow:"hidden",border:"1px solid #ede9e3"}}>
-                {[["kayitlar","📝 Kayıtlar"],["hesap","⚖️ Hesabım"]].map(([k,lbl])=>(
-                  <button key={k} onClick={()=>setSubTab(k)} style={{
-                    flex:1,background:subTab===k?"#1a1a1a":"transparent",border:"none",
-                    color:subTab===k?"#fff":"#888",padding:"9px 4px",cursor:"pointer",
-                    fontSize:13,fontFamily:"Inter,sans-serif",fontWeight:subTab===k?600:400,
-                    transition:"all 0.15s"
-                  }}>{lbl}</button>
-                ))}
-              </div>
-            </div>
-
-            {subTab==="kayitlar" && (
-              <div style={{padding:16}}>
-                <div style={{background:"#fff",border:`1px solid ${bd}`,borderRadius:14,
-                  padding:16,marginBottom:20,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-                  <div style={{fontSize:11,color:ac,letterSpacing:2,marginBottom:12,fontWeight:600}}>
-                    YENİ KAYIT — {names[pIdx].toUpperCase()}
-                  </div>
-                  <div style={{display:"flex",gap:8,marginBottom:10}}>
-                    {["gelir","gider"].map(t=>(
-                      <button key={t} onClick={()=>setForm({...form,type:t})} style={{
-                        flex:1,padding:"10px",borderRadius:8,cursor:"pointer",
-                        border:form.type===t?(t==="gelir"?"2px solid #1e8449":"2px solid #c0392b"):"2px solid #ede9e3",
-                        background:form.type===t?(t==="gelir"?"#f0faf3":"#fdf2f2"):"#f9f8f6",
-                        color:form.type===t?(t==="gelir"?"#1e8449":"#c0392b"):"#aaa",
-                        fontFamily:"Inter,sans-serif",fontSize:14,fontWeight:500,transition:"all 0.15s"
-                      }}>{t==="gelir"?"↑ Gelir":"↓ Gider"}</button>
-                    ))}
-                  </div>
-                  <input value={form.desc} onChange={e=>setForm({...form,desc:e.target.value})}
-                    placeholder="Açıklama (örn: Dava ücreti, Kırtasiye...)"
-                    style={{width:"100%",background:"#f9f8f6",border:"1px solid #ede9e3",
-                      borderRadius:8,padding:"11px 13px",color:"#1a1a1a",fontSize:14,marginBottom:10}}/>
-                  <div style={{display:"flex",gap:10}}>
-                    <input value={form.amount} type="number"
-                      onChange={e=>setForm({...form,amount:e.target.value})}
-                      onKeyDown={e=>{if(e.key==="Enter")addEntry(pIdx);}}
-                      placeholder="Tutar (₺)"
-                      style={{flex:1,background:"#f9f8f6",border:"1px solid #ede9e3",
-                        borderRadius:8,padding:"11px 13px",color:"#1a1a1a",fontSize:14}}/>
-                    <button onClick={()=>addEntry(pIdx)} style={{
-                      background:ac,border:"none",borderRadius:8,
-                      padding:"11px 22px",color:"#fff",cursor:"pointer",
-                      fontSize:22,fontWeight:"bold",boxShadow:`0 4px 12px ${ac}44`
-                    }}>+</button>
-                  </div>
-                </div>
-
-                <div style={{fontSize:11,color:"#aaa",letterSpacing:2,marginBottom:12,fontWeight:600}}>
-                  {monthLabel(month).toUpperCase()} KAYITLARI
-                </div>
-                {myEntries.length===0 && (
-                  <div style={{textAlign:"center",padding:"50px 0",color:"#ccc",fontSize:14}}>
-                    Henüz kayıt yok
-                  </div>
+              <div style={{overflowY:"auto",flex:1}}>
+                {allMonths.length===0&&(
+                  <div style={{textAlign:"center",color:"#ccc",padding:"30px 0",fontSize:14}}>Kayıtlı ay yok</div>
                 )}
-                {[...myEntries].reverse().map(entry=>(
-                  <div key={entry.id} style={{
-                    background:"#fff",
-                    borderLeft:`3px solid ${entry.type==="gelir"?"#1e8449":"#c0392b"}`,
-                    borderRadius:"0 10px 10px 0",padding:"12px 16px",marginBottom:8,
-                    display:"flex",justifyContent:"space-between",alignItems:"center",
-                    boxShadow:"0 1px 4px rgba(0,0,0,0.05)"}}>
-                    <div>
-                      <div style={{fontSize:14,fontWeight:500,color:"#1a1a1a"}}>{entry.desc}</div>
-                      <div style={{fontSize:11,color:"#bbb",marginTop:3}}>{entry.date}</div>
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",gap:12}}>
-                      <div style={{color:entry.type==="gelir"?"#1e8449":"#c0392b",fontWeight:700,fontSize:15}}>
-                        {entry.type==="gelir"?"+":"-"}{fmt(entry.amount)}
+                {allMonths.map(m=>{
+                  const s=calcSummary(m);
+                  const isSel=m===month;
+                  return (
+                    <div key={m} onClick={()=>{setMonth(m);setShowArchive(false);}}
+                      style={{background:isSel?"#f0f5fb":"#f9f8f6",
+                        border:isSel?"1.5px solid #b8d4ed":"1px solid #ede9e3",
+                        borderRadius:12,padding:"14px 16px",marginBottom:8,cursor:"pointer"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                        <div className="playfair" style={{fontSize:15,fontWeight:600}}>{monthLabel(m)}</div>
+                        <div style={{fontSize:13,fontWeight:700,color:"#1e8449"}}>{fmt(s.totalIncome)}</div>
                       </div>
-                      <button onClick={()=>delEntry(pIdx,entry.id)} style={{
-                        background:"none",border:"none",color:"#ccc",
-                        cursor:"pointer",fontSize:20,padding:0,lineHeight:1
-                      }}>×</button>
+                      <div style={{display:"flex",gap:16}}>
+                        <span style={{fontSize:11,color:"#c0392b"}}>−{fmt(s.totalExpense)}</span>
+                        <span style={{fontSize:11,color:"#1a5276"}}>Net: {fmt(s.netShare)}</span>
+                        <span style={{fontSize:11,color:"#d4ac0d"}}>Kişi: {fmt(s.perPerson)}</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-            )}
-
-            {subTab==="hesap" && (
-              <div style={{padding:16}}>
-                <div style={{background:"#fff",border:`1px solid ${bd}`,
-                  borderRadius:14,padding:"20px 18px",marginBottom:14,
-                  boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
-                    <div style={{width:40,height:40,borderRadius:"50%",background:lt,border:`2px solid ${bd}`,
-                      display:"flex",alignItems:"center",justifyContent:"center",
-                      fontSize:16,color:ac,fontWeight:700}}>{names[pIdx][0]}</div>
-                    <div>
-                      <div className="playfair" style={{fontSize:16,fontWeight:700,color:"#1a1a1a"}}>{names[pIdx]}</div>
-                      <div style={{fontSize:11,color:"#aaa"}}>{monthLabel(month)} · Ay Sonu Hesabı</div>
-                    </div>
-                  </div>
-                  {[["Topladığım Gelir",fmt(r.inc),"#1e8449"],
-                    ["Yaptığım Gider",fmt(r.exp),"#c0392b"],
-                    ["Kişi Başı Net Pay",fmt(r.perPerson),"#d4ac0d"],
-                    ["Toplam Alacağım",fmt(r.toReceive),"#1a5276"]
-                  ].map(([lbl,val,col],i)=>(
-                    <div key={i} style={{display:"flex",justifyContent:"space-between",
-                      alignItems:"center",padding:"11px 0",
-                      borderBottom:i<3?"1px solid #f5f3ef":"none"}}>
-                      <span style={{color:"#888",fontSize:14}}>{lbl}</span>
-                      <span style={{color:col,fontWeight:700,fontSize:15}}>{val}</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{padding:18,borderRadius:14,fontSize:16,textAlign:"center",fontWeight:700,
-                  background:r.balance>0.01?"#f0faf3":r.balance<-0.01?"#fdf2f2":"#f9f8f6",
-                  border:`1.5px solid ${r.balance>0.01?"#a9dfbf":r.balance<-0.01?"#f5c6c2":"#ede9e3"}`,
-                  color:r.balance>0.01?"#1e8449":r.balance<-0.01?"#c0392b":"#888"}}>
-                  {r.balance>0.01?`💰 Kasadan ${fmt(r.balance)} alacaksın`
-                   :r.balance<-0.01?`💸 Kasaya ${fmt(Math.abs(r.balance))} ödeyeceksin`
-                   :"✅ Hesap tamam"}
-                </div>
-              </div>
-            )}
+            </div>
           </div>
-        );
-      })()}
+        )}
 
-      {/* ══ ARŞİV MODAL ══ */}
-      {showArchive && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
-          display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}}>
-          <div style={{background:"#fff",borderRadius:"20px 20px 0 0",padding:"24px 20px",
-            width:"100%",maxWidth:480,maxHeight:"75vh",display:"flex",flexDirection:"column",
-            boxShadow:"0 -8px 40px rgba(0,0,0,0.2)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-              <div className="playfair" style={{fontSize:17,fontWeight:700}}>📅 Geçmiş Aylar</div>
-              <button onClick={()=>setShowArchive(false)}
-                style={{background:"none",border:"none",fontSize:22,color:"#aaa",cursor:"pointer"}}>×</button>
+        {/* SIFIRLAMA */}
+        {resetModal&&(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
+            display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
+            <div style={{background:"#fff",borderRadius:20,padding:28,
+              width:"90%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+              <div style={{fontSize:32,textAlign:"center",marginBottom:10}}>⚠️</div>
+              <div className="playfair" style={{fontSize:18,fontWeight:700,textAlign:"center",
+                marginBottom:8}}>Veri Sıfırlama</div>
+              <div style={{fontSize:13,color:"#888",textAlign:"center",marginBottom:20,lineHeight:1.7}}>
+                <strong style={{color:"#c0392b"}}>{monthLabel(month)}</strong> ayına ait tüm
+                kayıtlar silinecek.<br/>Devam için <strong>SIFIRLA</strong> yazın.
+              </div>
+              <input value={resetConfirm}
+                onChange={e=>setResetConfirm(e.target.value.toUpperCase())}
+                placeholder="SIFIRLA yazın..."
+                style={{width:"100%",background:"#f9f8f6",border:"1px solid #ede9e3",
+                  borderRadius:8,padding:"11px 13px",fontSize:14,marginBottom:14,
+                  textAlign:"center",letterSpacing:2}}/>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={doReset} disabled={resetConfirm!=="SIFIRLA"}
+                  style={{flex:1,background:resetConfirm==="SIFIRLA"?"#c0392b":"#f5c6c2",
+                    border:"none",borderRadius:10,padding:13,color:"#fff",
+                    cursor:resetConfirm==="SIFIRLA"?"pointer":"not-allowed",
+                    fontSize:14,fontWeight:600}}>Sıfırla</button>
+                <button onClick={()=>{setResetModal(false);setResetConfirm("");}}
+                  style={{flex:1,background:"#f5f3ef",border:"none",borderRadius:10,
+                    padding:13,color:"#555",cursor:"pointer",fontSize:14}}>İptal</button>
+              </div>
             </div>
-            <div style={{overflowY:"auto",flex:1}}>
-              {allMonths.length===0 && (
-                <div style={{textAlign:"center",color:"#ccc",padding:"30px 0",fontSize:14}}>
-                  Henüz kayıtlı ay yok
-                </div>
-              )}
-              {allMonths.map(m=>{
-                const s=calcSummary(m);
-                const isSelected=m===month;
-                return (
-                  <div key={m} onClick={()=>{setMonth(m);setShowArchive(false);setTab("ozet");}}
-                    style={{background:isSelected?"#f0f5fb":"#f9f8f6",
-                      border:isSelected?"1.5px solid #b8d4ed":"1px solid #ede9e3",
-                      borderRadius:12,padding:"14px 16px",marginBottom:8,cursor:"pointer"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                      <div className="playfair" style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>
-                        {monthLabel(m)}
-                      </div>
-                      <div style={{fontSize:13,fontWeight:700,color:"#1e8449"}}>{fmt(s.totalIncome)}</div>
-                    </div>
-                    <div style={{display:"flex",gap:16}}>
-                      <span style={{fontSize:11,color:"#c0392b"}}>−{fmt(s.totalExpense)}</span>
-                      <span style={{fontSize:11,color:"#1a5276"}}>Net: {fmt(s.netShare)}</span>
-                      <span style={{fontSize:11,color:"#d4ac0d"}}>Kişi: {fmt(s.perPerson)}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════
+  // ANA EKRAN
+  // ══════════════════════════════════════
+  return (
+    <div style={{minHeight:"100vh",background:"#f5f3ef"}}>
+      {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",
+        background:toast.color,color:"#fff",padding:"10px 20px",borderRadius:20,
+        fontSize:13,fontWeight:500,zIndex:999,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
+        whiteSpace:"nowrap"}}>{toast.msg}</div>}
+
+      {/* Ana ekran header */}
+      <div style={{background:"#1a1a1a",padding:"48px 24px 36px",
+        position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",right:-30,top:-30,fontSize:120,opacity:0.04}}>⚖️</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div>
+            <div className="playfair" style={{fontSize:26,fontWeight:700,color:"#fff",
+              letterSpacing:0.5,lineHeight:1.2}}>MADALYON</div>
+            <div style={{fontSize:11,color:"#888",letterSpacing:3,marginTop:3}}>HUKUK BÜROSU</div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>{setEditingNames(true);setTempNames(names);}}
+              style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",
+                borderRadius:8,color:"#aaa",padding:"6px 10px",cursor:"pointer",fontSize:12}}>✏️</button>
           </div>
         </div>
-      )}
 
-      {/* ══ SIFIRLAMA MODAL ══ */}
-      {resetModal && (
+        {/* Ay navigasyonu ana ekranda */}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:24,
+          background:"rgba(255,255,255,0.07)",borderRadius:12,padding:"8px 14px",
+          display:"inline-flex"}}>
+          <button onClick={()=>{
+            const [y,m2]=month.split("-").map(Number);
+            const d=new Date(y,m2-2);
+            setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+          }} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:20,padding:"0 4px"}}>‹</button>
+          <span style={{fontSize:14,color:"#fff",fontWeight:500,minWidth:100,textAlign:"center"}}>
+            {monthLabel(month)}
+          </span>
+          <button onClick={()=>{
+            const [y,m2]=month.split("-").map(Number);
+            const d=new Date(y,m2);
+            setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+          }} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:20,padding:"0 4px"}}>›</button>
+        </div>
+      </div>
+
+      {/* Ana kartlar */}
+      <div style={{padding:"24px 16px",display:"flex",flexDirection:"column",gap:14}}>
+
+        {/* Hesap Özeti kartı */}
+        <button onClick={()=>setScreen("ozet")} style={{
+          background:"#1a5276",border:"none",borderRadius:16,
+          padding:"22px 22px",cursor:"pointer",textAlign:"left",
+          boxShadow:"0 4px 20px rgba(26,82,118,0.3)",
+          position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",right:-10,top:-10,fontSize:60,opacity:0.1}}>📊</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",letterSpacing:2,marginBottom:8,fontWeight:500}}>
+            AY SONU
+          </div>
+          <div className="playfair" style={{fontSize:20,fontWeight:700,color:"#fff",marginBottom:6}}>
+            Hesap Özeti
+          </div>
+          <div style={{display:"flex",gap:20,marginTop:4}}>
+            <div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginBottom:2}}>Net</div>
+              <div style={{fontSize:14,color:"#2ecc71",fontWeight:600}}>{fmt(summary.netShare)}</div>
+            </div>
+            <div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginBottom:2}}>Kişi başı</div>
+              <div style={{fontSize:14,color:"#f39c12",fontWeight:600}}>{fmt(summary.perPerson)}</div>
+            </div>
+          </div>
+          <div style={{position:"absolute",right:20,top:"50%",transform:"translateY(-50%)",
+            color:"rgba(255,255,255,0.4)",fontSize:20}}>›</div>
+        </button>
+
+        {/* Ortak kartları */}
+        {[0,1,2].map(i=>{
+          const ac=ACCENT[i],lt=LIGHT[i],bd=BORDER[i],r=summary.results[i];
+          const totalEntries=getEntries(i,month).length;
+          return (
+            <button key={i} onClick={()=>{setScreen("ortak-"+i);setSubTab("kayitlar");}} style={{
+              background:"#fff",border:`1px solid ${bd}`,borderRadius:16,
+              padding:"20px 22px",cursor:"pointer",textAlign:"left",
+              boxShadow:"0 2px 12px rgba(0,0,0,0.06)",
+              position:"relative",overflow:"hidden"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:14}}>
+                  <div style={{width:46,height:46,borderRadius:"50%",background:lt,
+                    border:`2px solid ${bd}`,display:"flex",alignItems:"center",
+                    justifyContent:"center",fontSize:18,color:ac,fontWeight:700}}>
+                    {names[i][0]}
+                  </div>
+                  <div>
+                    <div className="playfair" style={{fontSize:18,fontWeight:700,color:"#1a1a1a"}}>
+                      {names[i]}
+                    </div>
+                    <div style={{fontSize:11,color:"#aaa",marginTop:2}}>
+                      {totalEntries} kayıt · {monthLabel(month)}
+                    </div>
+                  </div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:11,color:"#aaa",marginBottom:3}}>
+                    {r.balance>0.01?"alacak":r.balance<-0.01?"ödeyecek":"tamam"}
+                  </div>
+                  <div style={{fontSize:18,fontWeight:700,
+                    color:r.balance>0.01?"#1e8449":r.balance<-0.01?"#c0392b":"#888"}}>
+                    {r.balance>0.01?"+":""}{fmt(r.balance)}
+                  </div>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:10,marginTop:14}}>
+                <div style={{flex:1,background:"#f9f8f6",borderRadius:8,padding:"8px 10px",border:"1px solid #ede9e3"}}>
+                  <div style={{fontSize:10,color:"#aaa",marginBottom:2}}>Gelir</div>
+                  <div style={{color:"#1e8449",fontWeight:600,fontSize:12}}>{fmt(r.inc)}</div>
+                </div>
+                <div style={{flex:1,background:"#f9f8f6",borderRadius:8,padding:"8px 10px",border:"1px solid #ede9e3"}}>
+                  <div style={{fontSize:10,color:"#aaa",marginBottom:2}}>Gider</div>
+                  <div style={{color:"#c0392b",fontWeight:600,fontSize:12}}>{fmt(r.exp)}</div>
+                </div>
+                <div style={{flex:1,background:"#f9f8f6",borderRadius:8,padding:"8px 10px",border:"1px solid #ede9e3"}}>
+                  <div style={{fontSize:10,color:"#aaa",marginBottom:2}}>Alacak</div>
+                  <div style={{color:"#d4ac0d",fontWeight:600,fontSize:12}}>{fmt(r.toReceive)}</div>
+                </div>
+              </div>
+              <div style={{position:"absolute",right:16,top:20,color:"#ddd",fontSize:18}}>›</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* İSİM DÜZENLEME */}
+      {editingNames&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
           display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
           <div style={{background:"#fff",borderRadius:20,padding:28,
             width:"90%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
-            <div style={{fontSize:32,textAlign:"center",marginBottom:10}}>⚠️</div>
-            <div className="playfair" style={{fontSize:18,fontWeight:700,textAlign:"center",
-              marginBottom:8,color:"#1a1a1a"}}>Veri Sıfırlama</div>
-            <div style={{fontSize:13,color:"#888",textAlign:"center",marginBottom:20,lineHeight:1.7}}>
-              <strong style={{color:"#c0392b"}}>{monthLabel(month)}</strong> ayına ait tüm
-              kayıtlar kalıcı olarak silinecek.<br/>
-              Devam etmek için <strong>SIFIRLA</strong> yazın.
-            </div>
-            <input value={resetConfirm}
-              onChange={e=>setResetConfirm(e.target.value.toUpperCase())}
-              placeholder="SIFIRLA yazın..."
-              style={{width:"100%",background:"#f9f8f6",border:"1px solid #ede9e3",
-                borderRadius:8,padding:"11px 13px",color:"#1a1a1a",
-                fontSize:14,marginBottom:14,textAlign:"center",letterSpacing:2}}/>
-            <div style={{display:"flex",gap:10}}>
-              <button onClick={doReset} disabled={resetConfirm!=="SIFIRLA"}
-                style={{flex:1,background:resetConfirm==="SIFIRLA"?"#c0392b":"#f5c6c2",
-                  border:"none",borderRadius:10,padding:13,color:"#fff",
-                  cursor:resetConfirm==="SIFIRLA"?"pointer":"not-allowed",
-                  fontSize:14,fontWeight:600,transition:"all 0.15s"}}>
-                Sıfırla
-              </button>
-              <button onClick={()=>{setResetModal(false);setResetConfirm("");}}
-                style={{flex:1,background:"#f5f3ef",border:"none",borderRadius:10,
-                  padding:13,color:"#555",cursor:"pointer",fontSize:14}}>İptal</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══ İSİM DÜZENLEME ══ */}
-      {editingNames && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
-          display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
-          <div style={{background:"#fff",borderRadius:20,padding:28,
-            width:"90%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
-            <div className="playfair" style={{fontSize:17,fontWeight:700,marginBottom:20,color:"#1a1a1a"}}>
+            <div className="playfair" style={{fontSize:17,fontWeight:700,marginBottom:20}}>
               Ortak İsimlerini Düzenle
             </div>
             {tempNames.map((n,i)=>(
@@ -778,7 +841,8 @@ function App() {
               </div>
             ))}
             <div style={{display:"flex",gap:10,marginTop:14}}>
-              <button onClick={()=>{setNames(tempNames);setEditingNames(false);fbSave("buro/names",tempNames);showToast("✓ İsimler güncellendi");}}
+              <button onClick={()=>{setNames(tempNames);setEditingNames(false);
+                fbSave("buro/names",tempNames);showToast("✓ İsimler güncellendi");}}
                 style={{flex:1,background:"#1a1a1a",border:"none",borderRadius:10,
                   padding:13,color:"#fff",cursor:"pointer",fontSize:14,fontWeight:600}}>Kaydet</button>
               <button onClick={()=>{setEditingNames(false);setTempNames(names);}}
