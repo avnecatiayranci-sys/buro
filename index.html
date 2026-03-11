@@ -370,7 +370,7 @@ function App() {
     return doc;
   }
   function exportPDF(){
-    const s=calcSummary(month);
+    const s=calcSummary(aktifDonem||{});
     const _lbl=aktifDonem?aktifDonem.name:(new Date().toLocaleDateString("tr-TR"));
     buildPDF(_lbl,_lbl,names,s,false).save("Madalyon_Rapor.pdf");
     showToast("📄 PDF indirildi");
@@ -437,7 +437,7 @@ function App() {
   // ── ORTAK DETAY EKRANI ──
   if(screen.startsWith("ortak-")){
     const ac=ACCENT[pIdx],lt=LIGHT[pIdx],bd=BORDER[pIdx];
-    const myEntries=getEntries(pIdx,month);
+    const myEntries=getEntries(pIdx);
     const myInc=myEntries.filter(e=>e.type==="gelir").reduce((s,e)=>s+e.amount,0);
     const myExp=myEntries.filter(e=>e.type==="gider").reduce((s,e)=>s+e.amount,0);
     const r=summary.results[pIdx];
