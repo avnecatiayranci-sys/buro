@@ -158,11 +158,15 @@ function buildPDF(title,dates,names,s,isClosed,data){
 function ArsivGrafik({donemler,calcSum}){
   const sorted=[...donemler].sort((a,b)=>a.createdAt-b.createdAt);
   if(!sorted.length)return <div style={{textAlign:"center",color:"#ccc",padding:"30px 0",fontSize:14}}>Kayıtlı dönem yok</div>;
-  const rows=sorted.map(d=>{const s=calcSum(d);return{name:d.name,inc:s.totalIncome,exp:s.totalExpense,net:s.netShare,closed:d.closed};});
+  const rows=sorted.map(d=>{const s=calcSum(d);return{name:d.name,inc:s.totalIncome,exp:s.totalExpense,net:s.netShare,pp:s.perPerson,closed:d.closed};});
   const maxV=Math.max(1,...rows.map(r=>Math.max(r.inc,r.exp)));
   const barMaxH=140;
   const colW=64;
   const chartW=Math.max(rows.length*colW,rows.length*colW);
+  const totInc=rows.reduce((s,r)=>s+r.inc,0);
+  const totExp=rows.reduce((s,r)=>s+r.exp,0);
+  const totNet=totInc-totExp;
+  const totPP=totNet/3;
   return(
     <div>
       <div style={{display:"flex",gap:14,marginBottom:14,padding:"0 2px"}}>
@@ -192,17 +196,33 @@ function ArsivGrafik({donemler,calcSum}){
           ))}
         </div>
       </div>
-      <div style={{marginTop:16}}>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:14,padding:"12px 12px 4px",fontSize:10,color:"#aaa",fontWeight:600,letterSpacing:0.5}}>
+        <span style={{width:78,textAlign:"right"}}>GELİR</span>
+        <span style={{width:78,textAlign:"right"}}>GİDER</span>
+        <span style={{width:78,textAlign:"right"}}>NET</span>
+        <span style={{width:78,textAlign:"right"}}>KİŞİ BAŞI</span>
+      </div>
+      <div>
         {[...rows].reverse().map((r,idx)=>(
           <div key={idx} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",borderRadius:10,marginBottom:6,background:idx%2===0?"#f9f8f6":"transparent"}}>
             <div style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{r.name}</div>
             <div style={{display:"flex",gap:14}}>
-              <span style={{fontSize:12,color:"#1e8449",fontWeight:600}}>{fmt(r.inc)}</span>
-              <span style={{fontSize:12,color:"#c0392b",fontWeight:600}}>{fmt(r.exp)}</span>
-              <span style={{fontSize:12,color:"#1a5276",fontWeight:700}}>{fmt(r.net)}</span>
+              <span style={{fontSize:12,color:"#1e8449",fontWeight:600,width:78,textAlign:"right"}}>{fmt(r.inc)}</span>
+              <span style={{fontSize:12,color:"#c0392b",fontWeight:600,width:78,textAlign:"right"}}>{fmt(r.exp)}</span>
+              <span style={{fontSize:12,color:"#1a5276",fontWeight:700,width:78,textAlign:"right"}}>{fmt(r.net)}</span>
+              <span style={{fontSize:12,color:"#d4ac0d",fontWeight:700,width:78,textAlign:"right"}}>{fmt(r.pp)}</span>
             </div>
           </div>
         ))}
+      </div>
+      <div style={{marginTop:8,padding:"14px 12px",borderRadius:12,background:"#1a1a1a",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{fontSize:12,color:"#fff",fontWeight:700}}>TOPLAM ({rows.length} dönem)</div>
+        <div style={{display:"flex",gap:14}}>
+          <span style={{fontSize:12,color:"#2ecc71",fontWeight:700,width:78,textAlign:"right"}}>{fmt(totInc)}</span>
+          <span style={{fontSize:12,color:"#e74c3c",fontWeight:700,width:78,textAlign:"right"}}>{fmt(totExp)}</span>
+          <span style={{fontSize:12,color:"#5dade2",fontWeight:700,width:78,textAlign:"right"}}>{fmt(totNet)}</span>
+          <span style={{fontSize:12,color:"#f4d03f",fontWeight:700,width:78,textAlign:"right"}}>{fmt(totPP)}</span>
+        </div>
       </div>
     </div>
   );
@@ -579,13 +599,28 @@ function App(){
                         </div>
                       </div>
                       <div style={{display:"flex",gap:12}}>
-                        {[["Gelir",fmt(s2.totalIncome),"#1e8449"],["Gider",fmt(s2.totalExpense),"#c0392b"],["Net",fmt(s2.netShare),"#1a5276"]].map(([l,v,c])=>(
+                        {[["Gelir",fmt(s2.totalIncome),"#1e8449"],["Gider",fmt(s2.totalExpense),"#c0392b"],["Net",fmt(s2.netShare),"#1a5276"],["Kişi Başı",fmt(s2.perPerson),"#d4ac0d"]].map(([l,v,c])=>(
                           <div key={l}><div style={{fontSize:10,color:"#aaa"}}>{l}</div><div style={{fontSize:13,fontWeight:600,color:c}}>{v}</div></div>
                         ))}
                       </div>
                     </div>
                   );
                 })}
+                {donemler.length>0&&(()=>{
+                  const tI=donemler.reduce((s,d)=>s+calcSum(d).totalIncome,0);
+                  const tE=donemler.reduce((s,d)=>s+calcSum(d).totalExpense,0);
+                  const tN=tI-tE;const tP=tN/3;
+                  return(
+                    <div style={{marginTop:8,padding:"14px 16px",borderRadius:12,background:"#1a1a1a"}}>
+                      <div style={{fontSize:12,color:"#fff",fontWeight:700,marginBottom:8}}>TOPLAM ({donemler.length} dönem)</div>
+                      <div style={{display:"flex",gap:12}}>
+                        {[["Gelir",fmt(tI),"#2ecc71"],["Gider",fmt(tE),"#e74c3c"],["Net",fmt(tN),"#5dade2"],["Kişi Başı",fmt(tP),"#f4d03f"]].map(([l,v,c])=>(
+                          <div key={l}><div style={{fontSize:10,color:"#888"}}>{l}</div><div style={{fontSize:13,fontWeight:700,color:c}}>{v}</div></div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 </>}
               </div>
             </div>
