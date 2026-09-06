@@ -167,6 +167,7 @@ function ArsivGrafik({donemler,calcSum}){
   const totExp=rows.reduce((s,r)=>s+r.exp,0);
   const totNet=totInc-totExp;
   const totPP=totNet/3;
+  const avgPP=rows.length>0?totPP/rows.length:0;
   return(
     <div>
       <div style={{display:"flex",gap:14,marginBottom:14,padding:"0 2px"}}>
@@ -215,13 +216,19 @@ function ArsivGrafik({donemler,calcSum}){
           </div>
         ))}
       </div>
-      <div style={{marginTop:8,padding:"14px 12px",borderRadius:12,background:"#1a1a1a",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{fontSize:12,color:"#fff",fontWeight:700}}>TOPLAM ({rows.length} dönem)</div>
-        <div style={{display:"flex",gap:14}}>
-          <span style={{fontSize:12,color:"#2ecc71",fontWeight:700,width:78,textAlign:"right"}}>{fmt(totInc)}</span>
-          <span style={{fontSize:12,color:"#e74c3c",fontWeight:700,width:78,textAlign:"right"}}>{fmt(totExp)}</span>
-          <span style={{fontSize:12,color:"#5dade2",fontWeight:700,width:78,textAlign:"right"}}>{fmt(totNet)}</span>
-          <span style={{fontSize:12,color:"#f4d03f",fontWeight:700,width:78,textAlign:"right"}}>{fmt(totPP)}</span>
+      <div style={{marginTop:8,padding:"14px 12px",borderRadius:12,background:"#1a1a1a"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontSize:12,color:"#fff",fontWeight:700}}>TOPLAM ({rows.length} dönem)</div>
+          <div style={{display:"flex",gap:14}}>
+            <span style={{fontSize:12,color:"#2ecc71",fontWeight:700,width:78,textAlign:"right"}}>{fmt(totInc)}</span>
+            <span style={{fontSize:12,color:"#e74c3c",fontWeight:700,width:78,textAlign:"right"}}>{fmt(totExp)}</span>
+            <span style={{fontSize:12,color:"#5dade2",fontWeight:700,width:78,textAlign:"right"}}>{fmt(totNet)}</span>
+            <span style={{fontSize:12,color:"#f4d03f",fontWeight:700,width:78,textAlign:"right"}}>{fmt(totPP)}</span>
+          </div>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.1)"}}>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.5)"}}>Kişi başı aylık ortalama (tahmini)</div>
+          <div style={{fontSize:15,color:"#f4d03f",fontWeight:700}}>{fmt(avgPP)}</div>
         </div>
       </div>
     </div>
@@ -609,7 +616,7 @@ function App(){
                 {donemler.length>0&&(()=>{
                   const tI=donemler.reduce((s,d)=>s+calcSum(d).totalIncome,0);
                   const tE=donemler.reduce((s,d)=>s+calcSum(d).totalExpense,0);
-                  const tN=tI-tE;const tP=tN/3;
+                  const tN=tI-tE;const tP=tN/3;const avgP=tP/donemler.length;
                   return(
                     <div style={{marginTop:8,padding:"14px 16px",borderRadius:12,background:"#1a1a1a"}}>
                       <div style={{fontSize:12,color:"#fff",fontWeight:700,marginBottom:8}}>TOPLAM ({donemler.length} dönem)</div>
@@ -617,6 +624,10 @@ function App(){
                         {[["Gelir",fmt(tI),"#2ecc71"],["Gider",fmt(tE),"#e74c3c"],["Net",fmt(tN),"#5dade2"],["Kişi Başı",fmt(tP),"#f4d03f"]].map(([l,v,c])=>(
                           <div key={l}><div style={{fontSize:10,color:"#888"}}>{l}</div><div style={{fontSize:13,fontWeight:700,color:c}}>{v}</div></div>
                         ))}
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.1)"}}>
+                        <div style={{fontSize:11,color:"rgba(255,255,255,0.5)"}}>Kişi başı aylık ortalama (tahmini)</div>
+                        <div style={{fontSize:15,color:"#f4d03f",fontWeight:700}}>{fmt(avgP)}</div>
                       </div>
                     </div>
                   );
